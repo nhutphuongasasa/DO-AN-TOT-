@@ -1,0 +1,54 @@
+{
+  "batch_ids": [
+    "synthetic_batch1",
+    "synthetic_batch2",
+    "synthetic_batch3",
+    "synthetic_batch4",
+    "synthetic_batch5"
+  ],
+  "class_names": [
+    "chatgpt",
+    "meet",
+    "other-idle",
+    "other-update",
+    "other-web",
+    "spotify",
+    "youtube",
+    "zalo"
+  ],
+  "total_flow_windows": 9383,
+  "total_device_windows": 2290,
+  "total_sequences": 60,
+  "n_samples_flow": {
+    "youtube": 1770,
+    "spotify": 1770,
+    "meet": 1770,
+    "zalo": 1051,
+    "other-web": 980,
+    "chatgpt": 899,
+    "other-update": 705,
+    "other-idle": 438
+  },
+  "n_samples_device": {
+    "youtube": 295,
+    "zalo": 295,
+    "spotify": 295,
+    "meet": 295,
+    "chatgpt": 295,
+    "other-idle": 295,
+    "other-update": 292,
+    "other-web": 228
+  },
+  "n_samples_sequences": {
+    "other-web": 25,
+    "youtube": 5,
+    "zalo": 5,
+    "spotify": 5,
+    "meet": 5,
+    "chatgpt": 5,
+    "other-idle": 5,
+    "other-update": 5
+  },
+  "window_flow_seconds": 5.0,
+  "window_device_seconds": 30.0
+}

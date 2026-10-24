@@ -1,0 +1,484 @@
+# ==============================================================================
+# Encrypted Traffic Classification Rule Engine - Configuration & Rules
+# ==============================================================================
+# Domain Matching Syntax:
+#   - example.com      -> Matches domain and all subdomains (e.g., example.com, foo.example.com)
+#   - *.example.com    -> Matches subdomains only (not the bare domain)
+#   - =example.com     -> Exact match only (only example.com)
+# ==============================================================================
+
+version: "1.0.0"
+
+# ------------------------------------------------------------------------------
+# General Engine Settings & Thresholds
+# ------------------------------------------------------------------------------
+settings:
+  min_confidence: 0.5
+  cache_threshold: 0.8
+  dns_default_ttl: 480
+  dns_min_ttl: 60
+  dns_max_ttl: 3600
+  dns_max_entries: 100000
+  dns_confidence_factor: 0.9
+  flow_ttl: 300
+  flow_max_entries: 500000
+  flow_reclassify_packets: 10
+  supplementary_max_confidence: 0.6
+  ip_asn_max_confidence: 0.4
+  conflict_penalty: 0.2
+
+# ------------------------------------------------------------------------------
+# Domain-based Rules
+# ------------------------------------------------------------------------------
+# Design Decisions & Group Rationale:
+#   - Group A: Highly distinctive domains dedicated to a single application/service.
+#              Confidence: 0.95 - 0.98. Can decisively classify traffic alone.
+#   - Group B: Fairly distinctive core domains for specific applications.
+#              Confidence: 0.91 - 0.95. Strong evidence for classification.
+#   - Group B-: Ambiguous domains that often host shared services, trackers, CDNs,
+#              or redirects. Need supplementary evidence (JA3/JA4, flow metadata,
+#              ports, etc.) to achieve high overall confidence.
+#              Confidence: 0.60 - 0.85.
+#   - Group C: Widely shared platform domains (e.g., Google, Meta infrastructure).
+#              Can NEVER conclude alone because multiple distinct applications
+#              share the same underlying domain/CDN infrastructure.
+#              Confidence: 0.10 - 0.30.
+# ------------------------------------------------------------------------------
+domain_rules:
+  # ============================================================================
+  # Group A - Very distinctive domains (confidence 0.95 - 0.98)
+  # ============================================================================
+  - app: "youtube"
+    group: "A"
+    confidence: 0.97
+    domains:
+      - "googlevideo.com"
+    variants:
+      - "youtube_music"
+      - "youtube_tv"
+
+  - app: "youtube"
+    group: "A"
+    confidence: 0.96
+    domains:
+      - "ytimg.com"
+
+  - app: "netflix"
+    group: "A"
+    confidence: 0.97
+    domains:
+      - "nflxvideo.net"
+
+  - app: "netflix"
+    group: "A"
+    confidence: 0.96
+    domains:
+      - "nflximg.net"
+      - "nflxext.com"
+
+  - app: "chatgpt"
+    group: "A"
+    confidence: 0.97
+    domains:
+      - "chatgpt.com"
+
+  - app: "chatgpt"
+    group: "A"
+    confidence: 0.96
+    domains:
+      - "oaistatic.com"
+      - "oaiusercontent.com"
+
+  - app: "tiktok"
+    group: "A"
+    confidence: 0.97
+    domains:
+      - "tiktokv.com"
+
+  - app: "tiktok"
+    group: "A"
+    confidence: 0.96
+    domains:
+      - "tiktokcdn.com"
+
+  - app: "tiktok"
+    group: "A"
+    confidence: 0.95
+    domains:
+      - "musical.ly"
+
+  - app: "zalo"
+    group: "A"
+    confidence: 0.96
+    domains:
+      - "zaloapp.com"
+
+  - app: "discord"
+    group: "A"
+    confidence: 0.96
+    domains:
+      - "discord.media"
+      - "discordapp.com"
+      - "discordapp.net"
+
+  - app: "discord"
+    group: "A"
+    confidence: 0.95
+    domains:
+      - "discordcdn.com"
+
+  - app: "spotify"
+    group: "A"
+    confidence: 0.96
+    domains:
+      - "scdn.co"
+
+  - app: "spotify"
+    group: "A"
+    confidence: 0.95
+    domains:
+      - "spotilocal.com"
+      - "spotifycdn.com"
+
+  - app: "claude"
+    group: "A"
+    confidence: 0.97
+    domains:
+      - "claude.ai"
+
+  - app: "signal"
+    group: "A"
+    confidence: 0.96
+    domains:
+      - "whispersystems.org"
+
+  - app: "signal"
+    group: "A"
+    confidence: 0.95
+    domains:
+      - "signal.org"
+
+  - app: "whatsapp"
+    group: "A"
+    confidence: 0.96
+    domains:
+      - "whatsapp.net"
+
+  # ============================================================================
+  # Group B - Fairly distinctive (confidence 0.91 - 0.95)
+  # ============================================================================
+  - app: "youtube"
+    group: "B"
+    confidence: 0.93
+    domains:
+      - "youtube.com"
+      - "youtu.be"
+
+  - app: "youtube"
+    group: "B"
+    confidence: 0.92
+    domains:
+      - "youtube-nocookie.com"
+
+  - app: "tiktok"
+    group: "B"
+    confidence: 0.93
+    domains:
+      - "tiktok.com"
+
+  - app: "netflix"
+    group: "B"
+    confidence: 0.93
+    domains:
+      - "netflix.com"
+
+  - app: "netflix"
+    group: "B"
+    confidence: 0.91
+    domains:
+      - "netflix.net"
+
+  - app: "gemini"
+    group: "B"
+    confidence: 0.93
+    domains:
+      - "=gemini.google.com"
+
+  - app: "gemini"
+    group: "B"
+    confidence: 0.91
+    domains:
+      - "=bard.google.com"
+
+  - app: "instagram"
+    group: "B"
+    confidence: 0.93
+    domains:
+      - "instagram.com"
+      - "cdninstagram.com"
+
+  - app: "x"
+    group: "B"
+    confidence: 0.93
+    domains:
+      - "x.com"
+      - "twitter.com"
+
+  - app: "x"
+    group: "B"
+    confidence: 0.92
+    domains:
+      - "twimg.com"
+
+  - app: "zoom"
+    group: "B"
+    confidence: 0.93
+    domains:
+      - "zoom.us"
+      - "zoomgov.com"
+
+  - app: "zoom"
+    group: "B"
+    confidence: 0.92
+    domains:
+      - "zoom.com"
+
+  - app: "meet"
+    group: "B"
+    confidence: 0.93
+    domains:
+      - "=meet.google.com"
+
+  - app: "meet"
+    group: "B"
+    confidence: 0.92
+    domains:
+      - "=meet.googleapis.com"
+
+  - app: "discord"
+    group: "B"
+    confidence: 0.93
+    domains:
+      - "discord.com"
+
+  - app: "discord"
+    group: "B"
+    confidence: 0.91
+    domains:
+      - "discord.gg"
+
+  - app: "spotify"
+    group: "B"
+    confidence: 0.93
+    domains:
+      - "spotify.com"
+
+  - app: "appletv"
+    group: "B"
+    confidence: 0.92
+    domains:
+      - "tv.apple.com"
+
+  - app: "plex"
+    group: "B"
+    confidence: 0.93
+    domains:
+      - "plex.tv"
+
+  - app: "plex"
+    group: "B"
+    confidence: 0.92
+    domains:
+      - "plex.direct"
+
+  # ============================================================================
+  # Group B- - Ambiguous, need supplementary evidence (confidence 0.60 - 0.85)
+  # Rationale: Domains may serve APIs, web embeds/pixels, or shared parent companies,
+  # requiring supplementary signals to confirm primary traffic.
+  # ============================================================================
+  - app: "facebook"
+    group: "B-"
+    confidence: 0.75
+    domains:
+      - "facebook.com"
+    exclude:
+      - "connect.facebook.net"
+      - "pixel.facebook.com"
+      - "graph.facebook.com"
+
+  - app: "facebook"
+    group: "B-"
+    confidence: 0.70
+    domains:
+      - "fb.com"
+    exclude:
+      - "connect.facebook.net"
+      - "pixel.facebook.com"
+      - "graph.facebook.com"
+
+  - app: "facebook"
+    group: "B-"
+    confidence: 0.80
+    domains:
+      - "messenger.com"
+      - "m.me"
+    exclude:
+      - "connect.facebook.net"
+      - "pixel.facebook.com"
+      - "graph.facebook.com"
+
+  - app: "linkedin"
+    group: "B-"
+    confidence: 0.80
+    domains:
+      - "linkedin.com"
+
+  - app: "linkedin"
+    group: "B-"
+    confidence: 0.75
+    domains:
+      - "licdn.com"
+
+  - app: "x"
+    group: "B-"
+    confidence: 0.60
+    domains:
+      - "t.co"
+
+  - app: "youtube"
+    group: "B-"
+    confidence: 0.60
+    domains:
+      - "ggpht.com"
+
+  - app: "tiktok"
+    group: "B-"
+    confidence: 0.60
+    domains:
+      - "byteoversea.com"
+
+  - app: "zalo"
+    group: "B-"
+    confidence: 0.65
+    domains:
+      - "zdn.vn"
+      - "zalo.me"
+
+  - app: "whatsapp"
+    group: "B-"
+    confidence: 0.65
+    domains:
+      - "wa.me"
+
+  - app: "whatsapp"
+    group: "B"
+    confidence: 0.93
+    domains:
+      - "whatsapp.com"
+
+  - app: "chatgpt"
+    group: "B-"
+    confidence: 0.70
+    domains:
+      - "openai.com"
+
+  - app: "claude"
+    group: "B-"
+    confidence: 0.70
+    domains:
+      - "anthropic.com"
+
+  # ============================================================================
+  # Group C - Shared domains (never conclude alone)
+  # Rationale: These domains host shared cloud, API, or infrastructure services
+  # utilized across multiple distinct applications in the ecosystem.
+  # ============================================================================
+  - app: "generic_google"
+    group: "C"
+    confidence: 0.10
+    domains:
+      - "google.com"
+      - "gstatic.com"
+      - "googleapis.com"
+
+  - app: "meta_family"
+    group: "C"
+    confidence: 0.30
+    domains:
+      - "fbcdn.net"
+
+# ------------------------------------------------------------------------------
+# Ignored Domains (produce no classification evidence)
+# ------------------------------------------------------------------------------
+# Generic CDNs and cloud infrastructure providers used by thousands of unrelated apps.
+ignored_domains:
+  - "cloudflare.com"
+  - "akamai.net"
+  - "amazonaws.com"
+  - "cloudfront.net"
+
+# ------------------------------------------------------------------------------
+# JA3 TLS Fingerprint Rules
+# ------------------------------------------------------------------------------
+# Note: JA3 is unreliable for Chrome and Chromium-based browsers due to TLS extension
+# order randomization (GREASE and extension permutations). Prefer JA4 where possible.
+ja3_rules:
+  - hash: "PLACEHOLDER_JA3_HASH_CHROME"
+    app: "unknown_chrome_client"
+    confidence: 0.3
+    description: "Chrome browser TLS fingerprint (unstable due to extension randomization)"
+    note: "JA3 is unreliable for Chrome due to extension order randomization. Prefer JA4."
+
+# ------------------------------------------------------------------------------
+# JA4 TLS Fingerprint Rules
+# ------------------------------------------------------------------------------
+ja4_rules:
+  - hash: "PLACEHOLDER_JA4_HASH_1"
+    app: "unknown_client_1"
+    confidence: 0.4
+    description: "Placeholder JA4 fingerprint"
+
+# ------------------------------------------------------------------------------
+# Transport Port Rules
+# ------------------------------------------------------------------------------
+# Standard web ports (TCP 80, TCP 443) are skipped because virtually all HTTPS/HTTP
+# traffic traverses them, offering zero discriminative power for specific app classification.
+# Only specific non-standard or protocol-dedicated ports are captured.
+port_rules:
+  - port: 3478
+    protocol: "udp"
+    app: "stun_voice"
+    confidence: 0.5
+    description: "STUN/TURN for voice/video calls"
+  - port: 3479
+    protocol: "udp"
+    app: "stun_voice"
+    confidence: 0.5
+    description: "STUN/TURN alternate port"
+  - port: 19302
+    protocol: "udp"
+    app: "google_meet_stun"
+    confidence: 0.55
+    description: "Google Meet STUN server port"
+  - port: 8443
+    protocol: "tcp"
+    app: null
+    confidence: 0.3
+    description: "Alternative HTTPS port, many services"
+
+# ------------------------------------------------------------------------------
+# IP / ASN Rules
+# ------------------------------------------------------------------------------
+ip_asn_rules:
+  - asn: "ASN_PLACEHOLDER_GOOGLE"
+    app: "generic_google"
+    confidence: 0.2
+    description: "Google AS - too broad to identify specific app"
+  - asn: "ASN_PLACEHOLDER_META"
+    app: "meta_family"
+    confidence: 0.2
+    description: "Meta AS - could be Facebook, Instagram, WhatsApp"
+  - cidr: "CIDR_PLACEHOLDER"
+    app: "placeholder_app"
+    confidence: 0.3
+    description: "Placeholder IP range rule"

@@ -1,0 +1,813 @@
+{
+  "f1_mean": 0.9974000000000001,
+  "f1_std": 0.002205447800334451,
+  "f1_min": 0.9933,
+  "f1_max": 1.0,
+  "folds": [
+    {
+      "test_batch": "synthetic_batch1",
+      "n_estimators": 100,
+      "n_test": 458,
+      "f1_macro": 0.9979,
+      "report": {
+        "chatgpt": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 59.0
+        },
+        "meet": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 59.0
+        },
+        "other-idle": {
+          "precision": 0.9833333333333333,
+          "recall": 1.0,
+          "f1-score": 0.9915966386554622,
+          "support": 59.0
+        },
+        "other-update": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 59.0
+        },
+        "other-web": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 45.0
+        },
+        "spotify": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 59.0
+        },
+        "youtube": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 59.0
+        },
+        "zalo": {
+          "precision": 1.0,
+          "recall": 0.9830508474576272,
+          "f1-score": 0.9914529914529915,
+          "support": 59.0
+        },
+        "accuracy": 0.9978165938864629,
+        "macro avg": {
+          "precision": 0.9979166666666667,
+          "recall": 0.9978813559322034,
+          "f1-score": 0.9978812037635567,
+          "support": 458.0
+        },
+        "weighted avg": {
+          "precision": 0.9978529839883551,
+          "recall": 0.9978165938864629,
+          "f1-score": 0.9978164370663729,
+          "support": 458.0
+        }
+      },
+      "confusion_matrix": [
+        [
+          59,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          59,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          59,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          59,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          45,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          59,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          59,
+          0
+        ],
+        [
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          58
+        ]
+      ],
+      "class_names": [
+        "chatgpt",
+        "meet",
+        "other-idle",
+        "other-update",
+        "other-web",
+        "spotify",
+        "youtube",
+        "zalo"
+      ]
+    },
+    {
+      "test_batch": "synthetic_batch2",
+      "n_estimators": 100,
+      "n_test": 461,
+      "f1_macro": 0.9979,
+      "report": {
+        "chatgpt": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 59.0
+        },
+        "meet": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 59.0
+        },
+        "other-idle": {
+          "precision": 1.0,
+          "recall": 0.9830508474576272,
+          "f1-score": 0.9914529914529915,
+          "support": 59.0
+        },
+        "other-update": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 59.0
+        },
+        "other-web": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 48.0
+        },
+        "spotify": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 59.0
+        },
+        "youtube": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 59.0
+        },
+        "zalo": {
+          "precision": 0.9833333333333333,
+          "recall": 1.0,
+          "f1-score": 0.9915966386554622,
+          "support": 59.0
+        },
+        "accuracy": 0.9978308026030369,
+        "macro avg": {
+          "precision": 0.9979166666666667,
+          "recall": 0.9978813559322034,
+          "f1-score": 0.9978812037635567,
+          "support": 461.0
+        },
+        "weighted avg": {
+          "precision": 0.9978669558929862,
+          "recall": 0.9978308026030369,
+          "f1-score": 0.9978306468034681,
+          "support": 461.0
+        }
+      },
+      "confusion_matrix": [
+        [
+          59,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          59,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          58,
+          0,
+          0,
+          0,
+          0,
+          1
+        ],
+        [
+          0,
+          0,
+          0,
+          59,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          48,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          59,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          59,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          59
+        ]
+      ],
+      "class_names": [
+        "chatgpt",
+        "meet",
+        "other-idle",
+        "other-update",
+        "other-web",
+        "spotify",
+        "youtube",
+        "zalo"
+      ]
+    },
+    {
+      "test_batch": "synthetic_batch3",
+      "n_estimators": 100,
+      "n_test": 457,
+      "f1_macro": 0.9979,
+      "report": {
+        "chatgpt": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 59.0
+        },
+        "meet": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 59.0
+        },
+        "other-idle": {
+          "precision": 1.0,
+          "recall": 0.9830508474576272,
+          "f1-score": 0.9914529914529915,
+          "support": 59.0
+        },
+        "other-update": {
+          "precision": 0.9830508474576272,
+          "recall": 1.0,
+          "f1-score": 0.9914529914529915,
+          "support": 58.0
+        },
+        "other-web": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 45.0
+        },
+        "spotify": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 59.0
+        },
+        "youtube": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 59.0
+        },
+        "zalo": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 59.0
+        },
+        "accuracy": 0.9978118161925602,
+        "macro avg": {
+          "precision": 0.9978813559322034,
+          "recall": 0.9978813559322034,
+          "f1-score": 0.9978632478632479,
+          "support": 457.0
+        },
+        "weighted avg": {
+          "precision": 0.9978489040537032,
+          "recall": 0.9978118161925602,
+          "f1-score": 0.9978118161925602,
+          "support": 457.0
+        }
+      },
+      "confusion_matrix": [
+        [
+          59,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          59,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          58,
+          1,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          58,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          45,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          59,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          59,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          59
+        ]
+      ],
+      "class_names": [
+        "chatgpt",
+        "meet",
+        "other-idle",
+        "other-update",
+        "other-web",
+        "spotify",
+        "youtube",
+        "zalo"
+      ]
+    },
+    {
+      "test_batch": "synthetic_batch4",
+      "n_estimators": 100,
+      "n_test": 455,
+      "f1_macro": 1.0,
+      "report": {
+        "chatgpt": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 59.0
+        },
+        "meet": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 59.0
+        },
+        "other-idle": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 59.0
+        },
+        "other-update": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 57.0
+        },
+        "other-web": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 44.0
+        },
+        "spotify": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 59.0
+        },
+        "youtube": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 59.0
+        },
+        "zalo": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 59.0
+        },
+        "accuracy": 1.0,
+        "macro avg": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 455.0
+        },
+        "weighted avg": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 455.0
+        }
+      },
+      "confusion_matrix": [
+        [
+          59,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          59,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          59,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          57,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          44,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          59,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          59,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          59
+        ]
+      ],
+      "class_names": [
+        "chatgpt",
+        "meet",
+        "other-idle",
+        "other-update",
+        "other-web",
+        "spotify",
+        "youtube",
+        "zalo"
+      ]
+    },
+    {
+      "test_batch": "synthetic_batch5",
+      "n_estimators": 100,
+      "n_test": 459,
+      "f1_macro": 0.9933,
+      "report": {
+        "chatgpt": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 59.0
+        },
+        "meet": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 59.0
+        },
+        "other-idle": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 59.0
+        },
+        "other-update": {
+          "precision": 0.9827586206896551,
+          "recall": 0.9661016949152542,
+          "f1-score": 0.9743589743589743,
+          "support": 59.0
+        },
+        "other-web": {
+          "precision": 1.0,
+          "recall": 0.9782608695652174,
+          "f1-score": 0.989010989010989,
+          "support": 46.0
+        },
+        "spotify": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 59.0
+        },
+        "youtube": {
+          "precision": 0.9672131147540983,
+          "recall": 1.0,
+          "f1-score": 0.9833333333333333,
+          "support": 59.0
+        },
+        "zalo": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 59.0
+        },
+        "accuracy": 0.9934640522875817,
+        "macro avg": {
+          "precision": 0.9937464669304692,
+          "recall": 0.9930453205600589,
+          "f1-score": 0.9933379120879121,
+          "support": 459.0
+        },
+        "weighted avg": {
+          "precision": 0.9935693516147744,
+          "recall": 0.9934640522875817,
+          "f1-score": 0.99346046110752,
+          "support": 459.0
+        }
+      },
+      "confusion_matrix": [
+        [
+          59,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          59,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          59,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          57,
+          0,
+          0,
+          2,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          1,
+          45,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          59,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          59,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          59
+        ]
+      ],
+      "class_names": [
+        "chatgpt",
+        "meet",
+        "other-idle",
+        "other-update",
+        "other-web",
+        "spotify",
+        "youtube",
+        "zalo"
+      ]
+    }
+  ]
+}

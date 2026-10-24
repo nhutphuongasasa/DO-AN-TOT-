@@ -1,0 +1,75 @@
+# ============================================================
+# .gitignore — Edge AI Traffic Classification
+# ============================================================
+
+# ----- Python -----
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ----- Virtual Environment -----
+.venv/
+venv/
+env/
+ENV/
+
+# ----- Pytest / Testing -----
+.pytest_cache/
+.coverage
+htmlcov/
+*.xml
+
+# ----- PCAP files (large binary, không push lên GitHub) -----
+*.pcap
+*.pcapng
+
+# ----- Large ML model files -----
+# Model text files có thể lớn hàng MB — dùng Git LFS hoặc loại bỏ
+ml/models/**/*.txt
+ml/models/**/*.bin
+ml/models/**/*.onnx
+
+# ----- ML data (CSV lớn) -----
+ml/data/dataset_flow.csv
+ml/data/dataset_device.csv
+ml/data/dataset_sequences.npz
+
+# ----- Capture output -----
+captures/
+capture/
+
+# ----- Logs & reports tạm -----
+*.jsonl
+traffic_events.jsonl
+test_events.jsonl
+real_traffic_report.json
+user_f5_report.json
+user_traffic_report.json
+report.json
+test_report.json
+
+# ----- OS & Editor -----
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+*.iml
+
+# ----- Jupyter -----
+.ipynb_checkpoints/
+*.ipynb
+
+# Giữ lại các file quan trọng trong models (label_encoder, cv_summary)
+!ml/models/**/label_encoder.json
+!ml/models/**/cv_summary.json
+!ml/data/meta.json
+!ml/results/*.png
+!ml/results/*.html

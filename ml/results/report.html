@@ -1,0 +1,28 @@
+<!DOCTYPE html><html><head>
+<meta charset='utf-8'>
+<title>ML Evaluation Report — Edge AI Traffic Classification</title>
+<style>body{font-family:Arial,sans-serif;max-width:1100px;margin:auto;padding:20px}
+h1{color:#1a237e}h2{color:#283593;border-bottom:2px solid #e8eaf6;padding-bottom:4px}
+table{border-collapse:collapse;width:100%}
+th,td{border:1px solid #ccc;padding:8px;text-align:right}
+th{background:#e8eaf6;text-align:center}td:first-child{text-align:left}
+img{max-width:100%;margin:10px 0;border:1px solid #ddd;border-radius:4px}
+.metric{display:inline-block;background:#e3f2fd;border-radius:8px;
+padding:12px 24px;margin:8px;text-align:center}
+.metric .val{font-size:2em;font-weight:bold;color:#1565C0}
+.metric .lbl{font-size:0.85em;color:#555}</style>
+</head><body>
+<h1>📊 ML Evaluation Report — Edge AI Traffic Classification</h1>
+<h2>Model 1 — LightGBM Per-Flow</h2>
+<div class='metric'><div class='val'>0.995</div><div class='lbl'>F1 Mean</div></div><div class='metric'><div class='val'>±0.001</div><div class='lbl'>F1 Std</div></div><div class='metric'><div class='val'>0.993</div><div class='lbl'>F1 Min</div></div><div class='metric'><div class='val'>0.997</div><div class='lbl'>F1 Max</div></div>
+<h2>Model 2 — LightGBM Per-Device-Window</h2>
+<div class='metric'><div class='val'>0.997</div><div class='lbl'>F1 Mean</div></div>
+<h2>Biểu Đồ Đánh Giá</h2>
+<figure><img src='flow_confusion_matrix.png' alt='flow_confusion_matrix.png'><figcaption>flow_confusion_matrix.png</figcaption></figure>
+<figure><img src='flow_f1_per_class.png' alt='flow_f1_per_class.png'><figcaption>flow_f1_per_class.png</figcaption></figure>
+<figure><img src='flow_fold_f1.png' alt='flow_fold_f1.png'><figcaption>flow_fold_f1.png</figcaption></figure>
+<figure><img src='ablation_comparison.png' alt='ablation_comparison.png'><figcaption>ablation_comparison.png</figcaption></figure>
+<figure><img src='device_confusion_matrix.png' alt='device_confusion_matrix.png'><figcaption>device_confusion_matrix.png</figcaption></figure>
+<figure><img src='device_fold_f1.png' alt='device_fold_f1.png'><figcaption>device_fold_f1.png</figcaption></figure>
+<figure><img src='scenario_comparison.png' alt='scenario_comparison.png'><figcaption>scenario_comparison.png</figcaption></figure>
+</body></html>
