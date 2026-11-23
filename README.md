@@ -22,7 +22,7 @@ Tài liệu được viết lại dựa trên README dự án và các quyết �
 
 | File | Nội dung |
 |---|---|
-| [00-project-overview.md](00-project-overview.md) | Mục tiêu, phạm vi, đầu vào/đầu ra, giới hạn |
+| [00-project-overview.md](edge-ai-project-docs/00-project-overview.md) | Mục tiêu, phạm vi, đầu vào/đầu ra, giới hạn |
 | [01-system-architecture.md](01-system-architecture.md) | Kiến trúc tổng thể và các module |
 | [02-runtime-packet-flow.md](02-runtime-packet-flow.md) | Đường đi của packet khi chạy live/offline |
 | [03-dns-cache-design.md](03-dns-cache-design.md) | DNS parser, cache IP-domain, rủi ro CDN/DoH |
