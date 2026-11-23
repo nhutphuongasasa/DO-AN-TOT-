@@ -18,6 +18,8 @@ import glob
 import ipaddress
 import json
 import logging
+import sys
+import time
 from math import isinf, isnan
 from pathlib import Path
 from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Tuple
@@ -30,6 +32,26 @@ from scapy.layers.inet6 import IPv6
 from scapy.layers.l2 import Ether
 
 from ml.features import WindowStats
+
+
+# ---------------------------------------------------------------------------
+# Progress helpers
+# ---------------------------------------------------------------------------
+
+def _print_progress(pkt_count: int, matched: int, t_start: float, pcap_size_mb: float) -> None:
+    """In dòng tiến trình inline (overwrite dòng cũ)."""
+    elapsed = time.time() - t_start
+    pps = pkt_count / elapsed if elapsed > 0 else 0
+    bar_len = 25
+    # Ước tính % dựa trên số gói đã đọc (không biết tổng → dùng MB đã đọc)
+    pct_str = f"{pkt_count:,} pkts"
+    print(
+        f"\r  ⏳ {pct_str} | matched {matched:,} | "
+        f"{pps:,.0f} pkt/s | elapsed {elapsed:.0f}s | "
+        f"PCAP {pcap_size_mb:.1f}MB    ",
+        end="",
+        flush=True,
+    )
 
 logger = logging.getLogger("ml.dataset_builder")
 
@@ -337,10 +359,18 @@ class DatasetBuilder:
 
         pkt_count = 0
         matched_count = 0
+        pcap_size_mb = pcap_file.stat().st_size / 1024 / 1024
+        t_read_start = time.time()
+        print(f"  📂 Đọc PCAP: {pcap_file.name} ({pcap_size_mb:.1f} MB)")
         try:
             with PcapReader(str(pcap_file)) as reader:
                 for pkt in reader:
                     pkt_count += 1
+
+                    # Hiện progress mỗi 10,000 gói
+                    if pkt_count % 10_000 == 0:
+                        _print_progress(pkt_count, matched_count, t_read_start, pcap_size_mb)
+
                     res = self.parse_packet(pkt, app_intervals)
                     if res is None:
                         continue
@@ -359,9 +389,12 @@ class DatasetBuilder:
                         dev_dict[prec.mac] = []
                     dev_dict[prec.mac].append(prec)
         except Exception as exc:
+            print()  # xuống dòng sau progress
             logger.error("Error reading PCAP %s: %s", pcap_file, exc)
             return False
 
+        elapsed_read = time.time() - t_read_start
+        print(f"\r  ✅ Xong! {pkt_count:,} gói | {matched_count:,} matched | {elapsed_read:.1f}s" + " " * 20)
         logger.info(
             "Parsed %d total packets, %d matched active app intervals in session %s",
             pkt_count,

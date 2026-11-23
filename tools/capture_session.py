@@ -34,26 +34,51 @@ from typing import Optional
 # Danh sách app mặc định và kịch bản
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# 7 app chính theo kế hoạch đồ án
+# ---------------------------------------------------------------------------
 DEFAULT_APPS = [
     "youtube",
-    "zalo",
     "spotify",
-    "meet",
     "chatgpt",
-    "other-idle",
     "other-web",
+    "facebook",
+    "tiktok",
     "other-update",
 ]
 
+# Danh sách mở rộng — chấp nhận khi truyền --apps
+ALL_KNOWN_APPS = DEFAULT_APPS + [
+    "zalo",
+    "meet",
+    "other-idle",
+    "netflix",
+    "twitch",
+    "instagram",
+    "whatsapp",
+    "discord",
+    "zoom",
+]
+
 APP_SCENARIOS = {
+    # --- App chính (7 app kế hoạch) ---
     "youtube":      "Xem video liên tục. Đổi video + chất lượng (360p/720p/1080p) mỗi 10 phút.",
+    "spotify":      "Nghe nhạc playlist liên tục (KHÔNG tạm dừng). Thử podcast nếu muốn.",
+    "chatgpt":      "Đặt câu hỏi DÀI → chờ trả lời xong → câu tiếp. ~15 câu/30 phút.",
+    "other-web":    "Duyệt nhiều trang khác nhau (báo, Wikipedia, GitHub...). KHÔNG mở ChatGPT/YouTube.",
+    "facebook":     "Scroll News Feed chậm rãi, để ảnh/video load xong. Thỉnh thoảng xem Reels. KHÔNG nhắn tin.",
+    "tiktok":       "Xem video bình thường: xem 15-30s → swipe → xem tiếp. ~30-60 video/30 phút.",
+    "other-update": "Vào Play Store/App Store → tải cập nhật nhiều app cùng lúc. Lên kế hoạch trước.",
+    # --- App phụ (tùy chọn) ---
     "zalo":         "Gửi tin nhắn văn bản ~2 phút/lần, gửi ảnh ~5 phút/lần, 1 cuộc gọi thoại nếu có người.",
-    "spotify":      "Nghe nhạc playlist liên tục (không tạm dừng). Thử podcast nếu muốn.",
     "meet":         "Gọi video 2 chiều với người thứ hai. KHÔNG gọi 1 chiều (thiếu download).",
-    "chatgpt":      "Đặt câu hỏi dài → nhận streaming response. Xen lẫn câu hỏi ngắn. Ghi rõ: dùng WEB hay APP?",
-    "other-idle":   "Để màn hình bật, không tương tác. Chấp nhận push notification nền.",
-    "other-web":    "Duyệt nhiều trang khác nhau (báo, Wikipedia, GitHub...). KHÔNG mở ChatGPT.",
-    "other-update": "Chủ động tải cập nhật ứng dụng từ App Store / Play Store. Lên kế hoạch trước.",
+    "other-idle":   "Để màn hình bật, KHÔNG tương tác. Chấp nhận push notification nền.",
+    "netflix":      "Mở phim/series → bấm play → để chạy tự động. KHÔNG tạm dừng.",
+    "twitch":       "Mở 1 livestream đang live → để xem tự động. KHÔNG chat.",
+    "instagram":    "Scroll feed, xem Reels liên tục. KHÔNG nhắn tin.",
+    "whatsapp":     "Nhắn tin qua lại ~2 phút/lần. Gửi vài ảnh.",
+    "discord":      "Nhắn tin trong server/group. Tham gia voice channel nếu có.",
+    "zoom":         "Gọi video 2 chiều với người thứ hai.",
 }
 
 # ---------------------------------------------------------------------------
@@ -180,11 +205,20 @@ class TcpdumpProcess:
 
     def stop(self) -> None:
         if self._proc and self._proc.poll() is None:
-            self._proc.send_signal(signal.SIGTERM)
             try:
-                self._proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                self._proc.kill()
+                # Dùng sudo kill để tránh PermissionError khi tcpdump chạy với root
+                subprocess.run(
+                    ["kill", "-TERM", str(self._proc.pid)],
+                    check=False,
+                )
+                try:
+                    self._proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    subprocess.run(["kill", "-KILL", str(self._proc.pid)], check=False)
+            except Exception as e:
+                print_warn(f"Không dừng được tcpdump qua kill: {e}")
+                # Fallback: pkill theo tên
+                subprocess.run(["pkill", "-f", f"tcpdump.*{self.iface}"], check=False)
         print_ok("tcpdump đã dừng.")
 
 
@@ -320,9 +354,15 @@ def run_session(args: argparse.Namespace) -> None:
             note = input("  ChatGPT chạy bằng [w]eb browser hay [a]pp native? ").strip()
             note = "web" if note.startswith("w") else "app"
             print_info(f"Ghi nhận: chatgpt/{note}")
-        if app == "meet":
+        if app in ("meet", "zoom"):
             print_warn("Đảm bảo có người ở đầu bên kia để có traffic 2 chiều!")
             input("  Nhấn Enter khi sẵn sàng... ")
+        if app == "facebook":
+            print_warn("Chỉ scroll News Feed — KHÔNG nhắn tin Messenger trong lúc thu!")
+        if app == "tiktok":
+            print_warn("Xem video bình thường: xem 15-30s mỗi video rồi swipe tiếp.")
+        if app == "other-update":
+            print_warn("Vào Store tải update ngay bây giờ. Chuẩn bị danh sách app cần update trước.")
 
         # Đếm ngược chuẩn bị (tắt app cũ)
         if idx > 0:
@@ -421,8 +461,9 @@ Ví dụ:
                    help="Giây nghỉ bắt buộc giữa các app (default: 45)")
     p.add_argument("--trim",     type=int, default=15,
                    help="Giây cắt đầu/cuối mỗi phiên khi build dataset (default: 15)")
-    p.add_argument("--apps",     nargs="+", choices=DEFAULT_APPS + ["all"], default=None,
-                   help=f"Danh sách app cần thu (default: tất cả). Chọn từ: {DEFAULT_APPS}")
+    p.add_argument("--apps",     nargs="+", default=None,
+                   help=f"Danh sách app cần thu (default: tất cả 7 app). App hợp lệ: {DEFAULT_APPS}. "
+                        f"App phụ cũng được chấp nhận: zalo, meet, netflix, twitch, instagram...")
     p.add_argument("--shuffle",  action="store_true",
                    help="Ngẫu nhiên hóa thứ tự app (khuyên dùng giữa các đợt)")
     p.add_argument("--filter",   default="",
