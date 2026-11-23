@@ -1,104 +1,109 @@
-# 05 – Hướng Burst-based Traffic Classification
+# 05 — Burst-based ML Classification
 
-## 1. Vì sao nghiên cứu Burst?
+## 1. Mục đích
 
-Flow-based baseline hiện dùng thống kê tổng hợp của flow/window. Cách này có thể làm mất cấu trúc thời gian và chuỗi hành vi: upload ngắn, download dài, các đợt truyền dữ liệu, khoảng nghỉ giữa các đợt.
+Burst-based ML là nhánh fallback cuối cùng khi DNS và SNI đều không nhận diện được application. Nhánh này học hành vi traffic từ chuỗi packet hai chiều, không đọc payload.
 
-Burst-based thử biểu diễn traffic thành các nhóm packet gần nhau về thời gian và có thể cùng hướng, sau đó học từ:
-- kích thước và số lượng packet trong burst;
-- tổng byte;
-- thời lượng burst;
-- hướng upload/download;
-- khoảng cách giữa các burst;
-- thứ tự và mẫu xen kẽ giữa hai hướng.
+## 2. Phạm vi
 
-Burst-based là **hướng thí nghiệm**, không phải kết luận rằng mô hình này chắc chắn tốt hơn Flow-based.
+**Làm**
+- Bidirectional Flow Reconstruction.
+- Burst Segmentation.
+- Branch A: Burst Statistics → CatBoost.
+- Branch B: Burst Sequence → 1D-CNN.
+- Late Fusion / Stacking.
+- Application label hoặc `UNKNOWN`.
 
-## 2. Không thay baseline ngay
+**Không làm**
+- Không chạy nếu DNS hoặc SNI đã identified.
+- Không tự parse PCAP.
+- Không thay đổi Flow ID hoặc evidence DNS/SNI.
+- Không tự quyết định ngưỡng khi chưa có thí nghiệm.
 
-Giữ ít nhất ba nhánh để so sánh:
+## 3. Phụ thuộc
 
-1. **Flow-only:** baseline hiện tại.
-2. **Burst-only:** chỉ dùng đặc trưng burst/chuỗi burst.
-3. **Flow + Burst:** kết hợp hai nhóm đặc trưng.
+- Input từ Flow Tracker: Flow ID, packet timestamps, lengths và direction.
+- DNS/SNI Identification phải trả unresolved trước khi ML branch được gọi.
+- Feature schema từ `07-feature-engineering.md`.
+- Training/evaluation contract từ `08-model-training-and-evaluation.md`.
 
-So sánh trên cùng dataset, cùng session split, cùng nhãn, cùng metric và cùng quy tắc loại bỏ dữ liệu.
+## 4. Luồng xử lý
 
-## 3. Định nghĩa Burst phải được cố định
+1. Nhận Flow có `DNS_UNRESOLVED` và `SNI_UNRESOLVED`.
+2. Bidirectional Flow Reconstruction sắp xếp packet sequence theo Flow, giữ forward/backward direction.
+3. Burst Segmentation chia packet sequence thành Burst theo boundary rule đã cấu hình.
+4. Tạo Burst Statistics cho Branch A.
+5. Tạo Burst Sequence cho Branch B.
+6. Chạy CatBoost và 1D-CNN trên cùng observation/Flow.
+7. Late Fusion / Stacking hợp nhất hai model outputs.
+8. Application Classification áp dụng confidence/reject policy.
+9. Trả application label hoặc `UNKNOWN`.
 
-Burst là một nhóm packet trong cùng flow được gom theo quy tắc thời gian/hướng. Cần thử nghiệm và chọn ngưỡng bằng validation, không chọn theo test set.
+## 5. Input / Output
 
-Một định nghĩa ban đầu có thể là:
-- packet thuộc cùng flow;
-- cùng direction trong một burst;
-- packet kế tiếp cách packet trước không quá ngưỡng idle gap `T`;
-- nếu direction đổi hoặc gap vượt `T`, kết thúc burst và mở burst mới.
+**Input packet record tối thiểu**
+- `flow_id`
+- `timestamp`
+- `direction`
+- `packet_length`
 
-Đây chỉ là định nghĩa khởi đầu. Có thể nghiên cứu thêm burst hai chiều hoặc burst theo idle gap mà không tách direction, nhưng phải ghi rõ và so sánh.
+**Burst record logic**
+- `burst_id`, `flow_id`, `start_ts`, `end_ts`
+- `direction`
+- `packet_count`, `total_bytes`
+- ordered packet lengths/timestamps
+- `burst_index`, `inter_burst_gap` nếu định nghĩa
 
-## 4. Cấu trúc dữ liệu đề xuất
+**Output**
+- Branch A: CatBoost class scores/probabilities.
+- Branch B: 1D-CNN class scores/probabilities.
+- Fusion: final class scores.
+- Classifier: application hoặc `UNKNOWN`.
 
-Mỗi burst cần liên kết về:
-- `session_id`;
-- `flow_id`;
-- `burst_id`;
-- `start_ts`, `end_ts`;
-- `direction`;
-- `packet_count`;
-- `total_bytes`;
-- thống kê packet length;
-- IAT trong burst;
-- gap từ burst trước;
-- thứ tự burst trong flow.
+Tensor shape, feature order và exact output schema phải được chốt trong feature/model contract trước khi code.
 
-Không bỏ `flow_id`/`session_id`, vì đây là chìa khóa chống data leakage và truy vết lỗi.
+## 6. Quy tắc nghiệp vụ
 
-## 5. Feature ứng viên
+- BR-01: ML chỉ nhận Flow unresolved bởi DNS và SNI.
+- BR-02: Reconstruction phải giữ Flow ID và hai chiều.
+- BR-03: Burst chỉ chứa packet thuộc cùng Flow.
+- BR-04: Packet sequence phải có thứ tự thời gian xác định.
+- BR-05: Cùng observation phải tạo input tương ứng cho cả hai branch.
+- BR-06: Branch A sử dụng Burst Statistics với CatBoost.
+- BR-07: Branch B sử dụng Burst Sequence với 1D-CNN.
+- BR-08: Hai branch được hợp nhất bằng Late Fusion / Stacking.
+- BR-09: Không tự giả định fusion là average, voting hay meta-learner; thuật toán phải được chốt.
+- BR-10: Insufficient data hoặc confidence dưới threshold trả `UNKNOWN`.
 
-| Nhóm | Feature ví dụ |
+## 7. Lỗi và trường hợp biên
+
+| Tình huống | Hành vi |
 |---|---|
-| Quy mô | packet_count, total_bytes |
-| Kích thước | mean/std/min/max packet length |
-| Thời gian | duration, intra-burst IAT mean/std |
-| Hướng | upload/download, direction transition |
-| Liên burst | inter_burst_gap, previous_burst_direction |
-| Chuỗi | burst order, rolling statistics trên N burst gần nhất |
+| Flow chỉ có một chiều | Reconstruction vẫn tạo sequence; thiếu direction được biểu diễn rõ |
+| Flow quá ít packet | Không tạo prediction; trả insufficient-data/UNKNOWN |
+| Timestamp thiếu hoặc trùng | Áp dụng deterministic ordering policy; ghi lỗi dữ liệu |
+| Burst không có packet | Không gọi model |
+| Một model artifact thiếu | Fusion không giả vờ có đủ hai output; áp dụng policy fallback đã cấu hình hoặc UNKNOWN |
+| Model schema mismatch | Không inference; báo model/schema incompatibility |
+| Hai model dự đoán khác nhau | Ghi conflict; fusion policy xử lý rõ ràng |
 
-Chỉ thêm feature có định nghĩa rõ và có thể tính giống nhau offline/runtime.
+## 8. File/hàm chính
 
-## 6. Cách đưa Burst vào ML
+- `ml/train_flow.py`, `ml/train_device.py`, `ml/predictor.py`: tồn tại trong snapshot, nhưng tài liệu cũ mô tả baseline Flow/Device; không mặc định đây là CatBoost/1D-CNN branch.
+- Burst reconstruction/segmenter và CatBoost/1D-CNN runtime paths: chưa xác định được từ snapshot.
+- Coding Agent phải kiểm tra source và tái sử dụng implementation phù hợp trước khi thêm file.
 
-Có hai hướng:
-- **Tabular burst samples:** mỗi burst là một sample, có thể thử LightGBM. Cần quy định dự đoán burst đại diện cho app nào và cách tổng hợp nhiều burst thành flow prediction.
-- **Sequence model:** một flow là chuỗi burst có thứ tự, dùng mô hình chuỗi nếu lượng dữ liệu đủ. Không nên nhảy sang deep learning khi dataset còn ít.
+## 9. Tiêu chí nghiệm thu
 
-Bước đầu nên ưu tiên pipeline đơn giản, đo được, dễ debug.
+- [ ] Flow DNS/SNI identified không vào ML.
+- [ ] Flow unresolved được reconstruction hai chiều.
+- [ ] Burst không trộn packet từ Flow khác.
+- [ ] Branch A nhận đúng Burst Statistics.
+- [ ] Branch B nhận đúng Burst Sequence.
+- [ ] Hai branch output có cùng class ordering.
+- [ ] Fusion được kiểm thử với output thật từ hai branch.
+- [ ] Thiếu dữ liệu/schema/model không tạo nhãn giả.
 
-## 7. Tránh leakage
+## 10. Ví dụ
 
-Tất cả burst thuộc cùng một flow phải nằm trong cùng một split. Tốt hơn nữa, chia theo session/batch độc lập để test khả năng tổng quát hóa.
-
-Không được random split từng burst nếu cùng một flow xuất hiện ở cả train và test.
-
-## 8. Thí nghiệm cần thực hiện
-
-| Thí nghiệm | Câu hỏi |
-|---|---|
-| Flow-only | Baseline hiện tại đạt mức nào? |
-| Burst-only | Burst có tín hiệu phân biệt không? |
-| Flow + Burst | Burst có bổ sung thông tin không? |
-| Nhiều ngưỡng gap | Kết quả nhạy với T ra sao? |
-| Early vs late observation | Cần quan sát bao lâu mới dự đoán được? |
-| Per-class | App nào cải thiện, app nào giảm? |
-| Runtime cost | CPU, RAM, latency trên Edge ra sao? |
-
-## 9. Điều kiện chấp nhận Burst
-
-Chỉ chuyển Burst thành hướng chính khi:
-- tăng Macro F1 hoặc cải thiện lớp yếu một cách ổn định trên session độc lập;
-- không làm tăng false positive quá mức;
-- latency và RAM phù hợp Edge;
-- feature extraction có thể chạy giống nhau offline/runtime;
-- kết quả lặp lại được.
-
-Nếu Burst không vượt baseline, giữ Flow-only hoặc dùng Burst như feature bổ sung.
+Flow chưa được DNS hoặc SNI nhận diện được chuyển vào ML. Packet sequence của Flow được tái tạo hai chiều, chia thành Burst. CatBoost dự đoán từ thống kê Burst; 1D-CNN dự đoán từ chuỗi Burst. Late Fusion hợp nhất hai kết quả và trả `youtube` hoặc `UNKNOWN` tùy policy đã cấu hình.

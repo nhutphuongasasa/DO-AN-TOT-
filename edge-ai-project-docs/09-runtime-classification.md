@@ -1,93 +1,109 @@
-# 09 – Phân loại runtime: Rule Engine + ML
+# 09 — Runtime Application Classification
 
-## 1. Hai nguồn quyết định
+## 1. Mục đích
 
-### Rule Engine
-README mô tả các lớp:
-1. SNI;
-2. DNS cache;
-3. JA3/JA4;
-4. Port/protocol;
-5. IP/ASN.
+Điều phối quyết định cuối cùng theo thứ tự DNS → SNI → Burst-based ML và trả application label hoặc `UNKNOWN`.
 
-Mỗi lớp có độ tin cậy khác nhau. Các con số confidence trong README là cấu hình/ước lượng được mô tả, không nên xem là xác suất đã hiệu chuẩn nếu chưa kiểm tra.
+## 2. Phạm vi
 
-### ML
-ML nhận feature vector từ flow/window hoặc Burst sequence và trả dự đoán cùng confidence.
+**Làm**
+- Quản lý state nhận diện của Flow.
+- Gọi DNS Identifier trước.
+- Gọi SNI Identifier khi DNS unresolved.
+- Gọi Burst ML khi SNI unresolved.
+- Lưu method, evidence, confidence và lý do unknown.
 
-## 2. Quy tắc phối hợp
+**Không làm**
+- Không gọi ML trước DNS/SNI.
+- Không ghi đè kết quả rule bằng ML sau khi đã identified.
+- Không ép application khi confidence/evidence không đạt.
 
-Rule và ML không nên ghi đè lẫn nhau một cách im lặng. Mỗi kết quả cần lưu:
-- rule app/confidence/source/evidence;
-- ML app/confidence/model version;
-- final app/confidence/source;
-- conflict status và quyết định xử lý.
+## 3. Phụ thuộc
 
-## 3. State machine đề xuất
+- DNS Parser/Cache/Identifier.
+- TLS Parser và SNI Mapping.
+- Flow Tracker, Burst pipeline, CatBoost, 1D-CNN và Fusion.
+- Output/logging module.
 
-```text
-NEW
- |
- v
-COLLECTING
- |
- | đủ dữ liệu để đánh giá?
- +---- No ----> tiếp tục thu thập
- |
- Yes
- |
- v
-RULE_EVALUATED
- |
- +---- rule đủ tin cậy, evidence hợp lệ ---> CLASSIFIED_BY_RULE
- |
- +---- rule yếu / thiếu metadata ----------> ML_PENDING
-                                                 |
-                                      đủ feature/model?
-                                       /          \
-                                     No            Yes
-                                     |              |
-                                  UNKNOWN      ML_INFERENCE
-                                                    |
-                                      confidence đủ? |
-                                        /            \
-                                      No              Yes
-                                      |                |
-                                   UNKNOWN       CLASSIFIED_BY_ML
+## 4. Luồng xử lý
+
+1. Nhận Flow đủ metadata để đánh giá.
+2. Gọi DNS-based Application Identification.
+3. Nếu DNS identified: trả application, source `dns`, dừng.
+4. Nếu DNS unresolved: gọi TLS Parser/SNI Mapping.
+5. Nếu SNI identified: trả application, source `sni`, dừng.
+6. Nếu SNI unresolved: gửi Flow vào Burst ML.
+7. Reconstruction và segmentation tạo hai loại input.
+8. CatBoost và 1D-CNN inference.
+9. Late Fusion / Stacking hợp nhất output.
+10. Application Classifier áp dụng threshold/reject policy.
+11. Trả application hoặc `UNKNOWN`.
+
+## 5. Input / Output
+
+**Input**
+- `flow_id`
+- Flow metadata và packet sequence
+- DNS result
+- SNI result
+- Model outputs khi ML được gọi
+
+**Output logic**
+
+```json
+{
+  "flow_id": "flow_001",
+  "application": "youtube",
+  "status": "CLASSIFIED",
+  "method": "burst_fusion",
+  "confidence": 0.91,
+  "evidence": []
+}
 ```
 
-Đây là state machine thiết kế. Cần điều chỉnh theo API thực tế của pipeline.
+Ví dụ schema minh họa; output contract thực tế cần được khóa trong implementation. `confidence` chỉ xuất khi model/policy cung cấp giá trị có ý nghĩa.
 
-## 4. Không gọi ML quá sớm
+## 6. Quy tắc nghiệp vụ
 
-Không nên gọi ML trên từng packet nếu feature vector còn quá ít dữ liệu. Cần điều kiện rõ:
-- tối thiểu packet count;
-- tối thiểu thời gian quan sát;
-- feature vector hợp lệ;
-- model đã load và schema khớp;
-- không gọi lặp lại không cần thiết cho cùng observation.
+- BR-01: DNS là tầng identification đầu tiên.
+- BR-02: DNS identified trả kết quả ngay và không gọi SNI/ML.
+- BR-03: DNS unresolved mới gọi SNI.
+- BR-04: SNI identified trả kết quả ngay và không gọi ML.
+- BR-05: SNI unresolved mới gọi Burst ML.
+- BR-06: ML prediction dùng kết quả Late Fusion / Stacking.
+- BR-07: Confidence dưới threshold trả `UNKNOWN`.
+- BR-08: Thiếu model, feature hoặc evidence không được giả thành classification thành công.
+- BR-09: Mỗi output lưu method và evidence source.
+- BR-10: Không gộp device-level app list thành một nhãn duy nhất nếu thiết bị có nhiều app đồng thời.
 
-Có thể dự đoán lại khi cửa sổ mới có đủ dữ liệu, nhưng cần kiểm soát tần suất.
+## 7. Lỗi và trường hợp biên
 
-## 5. Conflict policy
+| Tình huống | Hành vi |
+|---|---|
+| DNS parser/cache unavailable | DNS unresolved; tiếp tục SNI |
+| SNI không có/ECH | SNI unresolved; tiếp tục ML |
+| ML input chưa đủ | UNKNOWN/insufficient-data |
+| Một model không load | Không chạy fusion đủ hai nhánh; theo policy đã cấu hình hoặc UNKNOWN |
+| Hai nhánh conflict | Ghi conflict và áp dụng fusion policy |
+| Confidence thấp | UNKNOWN |
+| Flow chưa đóng nhưng cần dự đoán | Chỉ dự đoán khi observation criteria đã được định nghĩa |
 
-Ví dụ:
-- SNI độc quyền, hợp lệ, không ambiguous có thể là evidence mạnh.
-- DNS shared-IP không nên thắng một evidence SNI mạnh.
-- ML và rule khác nhau: lưu conflict, áp dụng policy được định nghĩa trước; không tự động chọn ML chỉ vì confidence số học lớn hơn nếu hai confidence không cùng calibration.
-- Nếu cả hai yếu hoặc metadata mơ hồ: `unknown`.
+## 8. File/hàm chính
 
-## 6. Device aggregation
+- `rules.yaml`: rule configuration hiện có; kiểm tra thứ tự/domain mapping thực tế.
+- `ml/predictor.py`: predictor có trong snapshot; xác minh model type và API hiện tại.
+- Runtime orchestrator: chưa xác định path trong snapshot; tìm call graph thực tế trước khi thêm.
 
-Một thiết bị có thể chạy nhiều app cùng lúc. Không nên luôn ép một nhãn duy nhất cho thiết bị nếu các flow thể hiện nhiều ứng dụng. Có thể hiển thị danh sách app hoạt động, bytes/flow theo app và thời điểm quan sát.
+## 9. Tiêu chí nghiệm thu
 
-## 7. Truy vết
+- [ ] DNS identified không gọi SNI và ML.
+- [ ] DNS unresolved gọi SNI.
+- [ ] SNI identified không gọi ML.
+- [ ] DNS + SNI unresolved mới gọi ML.
+- [ ] ML result đến từ Late Fusion / Stacking.
+- [ ] Unknown có reason code.
+- [ ] Mỗi kết quả truy vết được tới Flow ID và evidence.
 
-Dashboard phải phân biệt:
-- `source=rule_sni`;
-- `source=rule_dns`;
-- `source=ml_flow`;
-- `source=ml_burst`;
-- `source=unknown`.
+## 10. Ví dụ
 
-Tên source là đề xuất; thống nhất với schema log thực tế.
+Flow có DNS mapping đã xác minh được trả application ngay tại bước DNS. Flow không có DNS evidence được thử SNI. Nếu SNI cũng không nhận diện được, Flow mới đi qua reconstruction, segmentation, CatBoost, 1D-CNN và fusion.

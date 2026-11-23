@@ -1,52 +1,69 @@
-# 00 – Tổng quan dự án
+# 00 — Tổng quan dự án
 
-## 1. Bài toán
+## 1. Mục đích
 
-Các ứng dụng hiện đại thường truyền dữ liệu qua TLS/HTTPS hoặc QUIC. Payload được mã hóa nên hệ thống không thể dựa vào nội dung ứng dụng để phân loại. Bài toán của đồ án là suy luận ứng dụng từ các dấu hiệu quan sát được bên ngoài payload.
+Hybrid Application Identification nhận diện ứng dụng tương ứng với Flow mạng bằng bằng chứng giao thức và hành vi traffic. Hệ thống không giải mã payload HTTPS và không đọc nội dung ứng dụng.
 
-## 2. Mục tiêu
+## 2. Bài toán
 
-- Thu thập traffic của các thiết bị trong mạng LAN.
-- Nhận diện metadata có thể quan sát: DNS, TLS ClientHello, QUIC Initial, giao thức, port.
-- Gom packet thành flow và trích xuất đặc trưng thống kê.
-- Nghiên cứu mô hình ML để phân loại ứng dụng khi luật không đủ thông tin.
-- Tổng hợp kết quả theo thiết bị và hiển thị trên dashboard.
-- Đánh giá khả năng hoạt động trên Edge với tài nguyên hạn chế.
+Traffic ứng dụng thường được mã hóa. IP hoặc port riêng lẻ không đủ để xác định ứng dụng, đặc biệt khi nhiều domain dùng chung CDN/IP. Dự án kết hợp ba tầng bằng chứng theo thứ tự cố định: DNS, TLS SNI và Burst-based ML.
 
-## 3. Ngoài phạm vi
+## 3. Đối tượng sử dụng
 
-- Không giải mã HTTPS payload hoặc đọc nội dung tin nhắn/video.
-- Không cam kết nhận diện chính xác mọi ứng dụng trong mọi mạng.
-- Không coi IP, port hoặc ASN đơn lẻ là định danh ứng dụng.
-- Không khẳng định có thể nhận diện ứng dụng khi traffic hoàn toàn không có tín hiệu phân biệt.
+- Người phát triển hệ thống cần triển khai và kiểm thử pipeline.
+- Người vận hành/nghiên cứu mạng cần xem ứng dụng được nhận diện và evidence tương ứng.
 
-## 4. Đầu vào và đầu ra
+## 4. Phạm vi
 
-| Loại | Nội dung |
+**Trong phạm vi**
+- Capture packet từ NIC hoặc PCAP.
+- Parse packet và theo dõi Flow.
+- DNS Response parsing, DNS Cache và DNS domain mapping.
+- TLS ClientHello parsing và SNI mapping.
+- Bidirectional Flow Reconstruction và Burst Segmentation.
+- CatBoost, 1D-CNN và Late Fusion / Stacking.
+- Kết quả application hoặc `UNKNOWN`.
+
+**Ngoài phạm vi**
+- Giải mã payload HTTPS.
+- Khẳng định nhận diện được mọi ứng dụng trong mọi điều kiện.
+- Kết luận ứng dụng chỉ từ một IP/port nếu evidence không đủ.
+- Coi DNS Cache là ánh xạ IP → application một-một.
+
+## 5. Input / Output
+
+| Loại | Dữ liệu |
 |---|---|
-| Đầu vào capture | Ethernet/IP/TCP/UDP packets từ NIC hoặc PCAP |
-| Metadata | DNS query/response, SNI, ALPN, JA3/JA4 nếu parse được |
-| Nhãn training | Ứng dụng đang được chủ động sử dụng trong từng khoảng thời gian |
-| Flow output | 5-tuple, thống kê packet/byte/time/direction |
-| Burst output | Chuỗi nhóm packet liên tiếp theo quy tắc burst được định nghĩa |
-| Kết quả | App dự đoán, confidence, nguồn quyết định, thiết bị, thời gian |
+| Input | Ethernet/IP/TCP/UDP packet từ NIC hoặc PCAP |
+| Protocol evidence | DNS Response, domain, IP, TTL, TLS ClientHello, SNI |
+| Flow data | 5-tuple, timestamp, direction, packet length, packet sequence |
+| ML input A | Burst Statistics |
+| ML input B | Burst Sequence |
+| Output | Flow identifier, application label hoặc `UNKNOWN`, identification method, evidence và confidence khi có |
 
-## 5. Đối tượng phân loại
+Schema output chính thức chưa được xác nhận. Xem `12-glossary-and-decisions.md`, mục Open Decisions.
 
-Các nhãn được README cũ đề cập gồm YouTube, Spotify, Zalo, Google Meet, ChatGPT và các lớp nền như other-idle, other-web, other-update. Danh sách nhãn cuối cùng phải được chốt dựa trên dữ liệu thực tế, không nên giữ lớp chưa có mẫu.
+## 6. Quy tắc kiến trúc
 
-## 6. Hai cấp độ phân loại
+- BR-01: DNS identification phải chạy trước SNI identification.
+- BR-02: SNI identification chỉ chạy khi DNS trả `DNS_UNRESOLVED`.
+- BR-03: ML chỉ chạy khi DNS và SNI đều unresolved.
+- BR-04: Flow đã identified bằng DNS hoặc SNI không được gửi vào ML classification.
+- BR-05: ML sử dụng hai nhánh CatBoost và 1D-CNN.
+- BR-06: Kết quả hai nhánh ML được hợp nhất bằng Late Fusion / Stacking.
+- BR-07: Không đủ độ tin cậy thì trả `UNKNOWN`.
 
-- **Flow-level:** dự đoán ứng dụng cho một flow hoặc một cửa sổ quan sát của flow.
-- **Device-level:** tổng hợp nhiều flow thuộc cùng thiết bị trong một khoảng thời gian.
+## 7. Giới hạn đã biết
 
-Không được nhầm hai bài toán này: một thiết bị có thể đồng thời chạy nhiều ứng dụng.
+- DoH/DoT, VPN hoặc DNS cache ở endpoint có thể khiến DNS Response không xuất hiện trong capture.
+- ECH có thể che SNI.
+- TCP ClientHello có thể bị chia qua nhiều segment.
+- Một IP có thể phục vụ nhiều domain.
+- Sơ đồ xác định kiến trúc mục tiêu; không chứng minh mọi module đã có code.
 
-## 7. Tiêu chí thành công
+## 8. Tiêu chí nghiệm thu
 
-- Dataset có nhãn đáng tin cậy, nhiều phiên độc lập cho mỗi lớp.
-- Flow tracking không trộn lẫn kết nối hoặc hướng truyền.
-- Feature offline và runtime giống nhau.
-- Kết quả được đánh giá trên session chưa xuất hiện trong training.
-- Có báo cáo per-class, confusion matrix, Macro F1 và kiểm tra độ trễ/tài nguyên.
-- Hệ thống trả về `unknown` khi không đủ bằng chứng thay vì ép đoán.
+- [ ] README và architecture mô tả cùng một thứ tự DNS → SNI → ML.
+- [ ] Mỗi kết quả phân loại có thể truy ngược Flow và evidence.
+- [ ] Có trạng thái `UNKNOWN`.
+- [ ] Tài liệu phân biệt rõ phần implemented, tested, designed và open.

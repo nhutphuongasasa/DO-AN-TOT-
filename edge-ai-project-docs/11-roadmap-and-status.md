@@ -1,71 +1,83 @@
-# 11 – Roadmap và quản lý trạng thái
+# 11 — Roadmap và trạng thái
 
-## 1. Trạng thái theo bằng chứng hiện có
+## 1. Quy ước trạng thái
 
-| Hạng mục | Trạng thái theo README / trao đổi | Việc cần xác minh |
+- `IMPLEMENTED`: có source code xác định.
+- `TESTED`: có test pass hoặc bằng chứng replay.
+- `DESIGNED`: có trong sơ đồ/tài liệu, chưa xác nhận code.
+- `OPEN`: thiếu thông số hoặc quyết định.
+
+Không nâng trạng thái chỉ dựa trên sơ đồ.
+
+## 2. Trạng thái theo snapshot được cung cấp
+
+| Hạng mục | Trạng thái có thể xác nhận | Việc tiếp theo |
 |---|---|---|
-| Packet capture live/offline | README mô tả đã có code | Test interface và replay |
-| DNS/TLS/QUIC parser | README mô tả đã có | Kiểm tra code và edge cases |
-| Flow Tracker | README mô tả đã có | Hai chiều, timeout, tuple reuse |
-| Rule Engine | README mô tả đã có | Rule precedence và ambiguity |
-| Dataset Builder | Có code theo README | Label boundary, leakage |
-| Flow features 24 cột | Có code theo README | Công thức và parity |
-| LightGBM baseline | Có script; kết quả chưa tốt | Tái lập metric |
-| Burst-based | Đang nghiên cứu | Thiết kế, implement, benchmark |
-| DNS cache hardening | Cần audit | Multi-domain/IP, TTL, client scope |
-| ML runtime integration | README ghi kế hoạch | Xác minh pipeline call path |
-| Dashboard | Có Rich terminal theo README | Kiểm tra output và trạng thái thực |
+| Scapy dependency | IMPLEMENTED (dependency khai báo) | Xác minh runtime capture call path |
+| Flow/Device ML scripts | IMPLEMENTED (file tồn tại) | Kiểm tra API, model type và metrics |
+| Flow label encoder | IMPLEMENTED (artifact tồn tại) | Đồng bộ class mapping |
+| DNS → SNI → Burst ML orchestration | DESIGNED | Tìm/viết orchestrator và test call order |
+| DNS Cache hardening | DESIGNED / OPEN | Xác minh source, TTL, client scope |
+| SNI mapping | DESIGNED / OPEN | Xác minh parser và rules |
+| Bidirectional Flow Reconstruction | DESIGNED | Chốt input/output contract |
+| Burst Segmentation | DESIGNED | Chốt boundary rule |
+| CatBoost branch | DESIGNED / OPEN | Xác nhận implementation và artifact |
+| 1D-CNN branch | DESIGNED / OPEN | Xác nhận framework, tensor schema |
+| Late Fusion / Stacking | DESIGNED / OPEN | Chốt algorithm và training protocol |
+| Final UNKNOWN policy | DESIGNED / OPEN | Chốt thresholds và reason codes |
 
-## 2. Thứ tự ưu tiên
+## 3. Thứ tự triển khai
 
-### P0 – Đảm bảo dữ liệu đầu vào đúng
-- Audit DNS parser/cache.
-- Audit Flow Tracker và direction.
-- Kiểm tra session labels, flow grouping và split leakage.
+### P0 — Chốt contract
+- [ ] Xác minh packet/Flow record hiện có.
+- [ ] Chốt Flow ID, direction và packet ordering.
+- [ ] Chốt DNS observation/cache lookup contract.
+- [ ] Chốt SNI mapping contract.
+- [ ] Chốt output result schema.
 
-### P1 – Khóa feature contract
-- Chốt Flow window semantics.
-- Viết test offline/runtime parity.
-- Version hóa feature schema.
+### P1 — Hoàn thiện rule-first path
+- [ ] DNS Parser + DNS Cache.
+- [ ] DNS Application Identification.
+- [ ] TLS ClientHello Parser + SNI Mapping.
+- [ ] Unit/integration tests cho DNS → SNI precedence.
 
-### P2 – Làm baseline đáng tin cậy
-- Tái lập Flow LightGBM.
-- Báo cáo per-class và session split.
-- Phân tích lỗi lớp yếu, label noise và feature leakage.
+### P2 — Hoàn thiện Burst input
+- [ ] Bidirectional Flow Reconstruction.
+- [ ] Burst Segmentation.
+- [ ] Burst Statistics schema.
+- [ ] Burst Sequence tensor schema.
+- [ ] Offline/runtime parity tests.
 
-### P3 – Thử nghiệm Burst
-- Định nghĩa burst boundary.
-- Xây extractor độc lập.
-- Tạo Burst dataset với flow/session IDs.
-- So sánh Flow-only, Burst-only, Flow+Burst.
+### P3 — Hoàn thiện ML
+- [ ] CatBoost training/inference.
+- [ ] 1D-CNN training/inference.
+- [ ] Late Fusion / Stacking.
+- [ ] Confidence calibration và UNKNOWN policy.
 
-### P4 – Tích hợp runtime
-- Chốt state machine và minimum observation.
-- Tích hợp predictor sau khi schema ổn định.
-- Kiểm soát conflict, unknown và log evidence.
+### P4 — End-to-end validation
+- [ ] PCAP replay qua toàn bộ Hybrid flow.
+- [ ] Kiểm tra call order và branch skipping.
+- [ ] Báo cáo per-class metrics.
+- [ ] Đo latency/RAM trên thiết bị Edge.
+- [ ] Đồng bộ README, architecture và code.
 
-### P5 – Hoàn thiện đồ án
-- Replay end-to-end.
-- Đo latency/RAM trên Edge.
-- Cập nhật README, sơ đồ, báo cáo và demo.
+## 4. Definition of Done
 
-## 3. Definition of Done
+Một module chỉ được đánh dấu `TESTED` khi:
+- code có mặt;
+- interface/input/output được mô tả;
+- unit/integration test liên quan pass;
+- có ít nhất một PCAP/test fixture tái lập;
+- log có thể truy vết Flow ID;
+- tài liệu khớp implementation.
 
-Một hạng mục chỉ được đánh dấu hoàn thành khi:
-- code tồn tại;
-- test liên quan pass;
-- có dữ liệu/log chứng minh;
-- có hướng dẫn chạy;
-- trạng thái tài liệu khớp implementation.
+## 5. Change log template
 
-## 4. Nhật ký thay đổi
-
-Nên ghi mỗi quyết định quan trọng theo mẫu:
 - Ngày:
-- Vấn đề:
-- Quyết định:
+- Module:
+- Thay đổi:
 - Lý do:
-- Phương án đã loại:
-- File/code bị ảnh hưởng:
-- Test cần chạy:
+- File/code:
+- Test:
 - Kết quả:
+- Tài liệu cập nhật:

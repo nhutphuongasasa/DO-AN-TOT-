@@ -1,64 +1,86 @@
-# 06 – Thu thập dữ liệu và gán nhãn
+# 06 — Thu thập dữ liệu và gán nhãn
 
-## 1. Mục tiêu dữ liệu
+## 1. Mục đích
 
-Mô hình cần học sự khác biệt hành vi traffic giữa các ứng dụng, không học nhầm đặc điểm của một phiên capture, một thiết bị hoặc một thời điểm duy nhất.
+Tạo PCAP và label session để huấn luyện, validation và test hai nhánh Burst ML. Dataset phải giữ quan hệ session → Flow → Burst để tránh leakage.
 
-## 2. Thành phần một session
+## 2. Phạm vi
 
-Một session nên có:
-- PCAP;
-- file labels (START/END hoặc event timeline);
-- metadata session: session ID, batch, ngày giờ, thiết bị, OS, interface, subnet, app, phiên bản app nếu biết;
-- ghi chú điều kiện mạng: Wi-Fi/Ethernet, VPN, DNS mode, người dùng/thiết bị khác có traffic nền không.
+- Thu PCAP từ thiết bị thử nghiệm.
+- Ghi session metadata và app activity timeline.
+- Gán nhãn theo khoảng START/END hoặc event timeline.
+- Kiểm tra chất lượng và chia split theo session.
 
-README cũ đề cập `tools/capture_session.py` tạo PCAP, labels JSONL và session JSON. Cần kiểm tra format thực tế của các file đầu ra.
+Không gán label dựa trên dự đoán của model.
 
-## 3. Quy trình thu thập khuyến nghị
+## 3. Phụ thuộc
 
-1. Chuẩn bị thiết bị và kiểm tra interface.
-2. Đóng hoặc ghi nhận các ứng dụng không thuộc thí nghiệm.
+- Capture source và packet pipeline.
+- Flow Tracking để gắn packet vào Flow.
+- Burst Segmentation để tạo Burst samples.
+- Training pipeline trong `08-model-training-and-evaluation.md`.
+
+## 4. Luồng xử lý
+
+1. Tạo session ID.
+2. Ghi thiết bị, OS, interface, subnet, điều kiện mạng và app version nếu biết.
 3. Bắt đầu capture trước khi mở app.
-4. Ghi nhãn START đúng lúc bắt đầu thao tác.
-5. Thực hiện hành vi đại diện (ví dụ xem video, nghe nhạc, gọi họp), không chỉ mở app rồi để yên.
-6. Ghi nhãn END sau khi dừng hoạt động.
-7. Chờ một khoảng ngắn để quan sát traffic nền nếu cần.
-8. Lặp lại nhiều session độc lập vào thời điểm khác nhau.
-9. Kiểm tra PCAP và nhãn trước khi build dataset.
+4. Ghi START khi bắt đầu hành vi thử nghiệm.
+5. Thực hiện hành vi đại diện của app.
+6. Ghi END khi dừng hành vi.
+7. Dừng capture và lưu PCAP.
+8. Kiểm tra PCAP, timestamps và labels.
+9. Build Flow/Burst dataset; giữ `session_id` và `flow_id`.
+10. Chia train/validation/test theo session hoặc batch.
 
-## 4. Nhiễu nhãn
+## 5. Input / Output
 
-Session labeling theo thời gian có thể gán nhãn sai nếu:
-- hệ điều hành tự cập nhật;
-- trình duyệt chạy nhiều tab/app;
-- app phụ thuộc dịch vụ chung;
-- app đã dừng nhưng connection vẫn còn;
-- flow bắt đầu trước START hoặc kết thúc sau END;
-- nhiều app chạy đồng thời.
+| Dữ liệu | Trường |
+|---|---|
+| PCAP | Packet records và timestamp |
+| Label event | `session_id`, `application`, `event`, `timestamp` |
+| Session metadata | `session_id`, `batch_id`, device, OS, interface, subnet, network conditions |
+| Dataset row | `session_id`, `flow_id`, `burst_id` nếu là Burst sample, label, feature values |
 
-Cần quy định rõ cách xử lý flow cắt qua biên nhãn. Có thể loại mẫu không đủ chắc chắn thay vì ép gán nhãn.
+README cũ đề cập `tools/capture_session.py` tạo PCAP, labels JSONL và session JSON; cần kiểm tra format thực tế trước khi thay đổi.
 
-## 5. Nhãn nền
+## 6. Quy tắc nghiệp vụ
 
-Các lớp `other-idle`, `other-web`, `other-update` phải có định nghĩa vận hành rõ ràng. Không dùng `other` như một nhãn gom mọi thứ nếu trong đó có nhiều hành vi khác nhau.
+- BR-01: Mỗi lần thu thập có `session_id` riêng.
+- BR-02: Capture bắt đầu trước thao tác app.
+- BR-03: Mọi Flow/Burst sample phải giữ nguồn session.
+- BR-04: Tất cả Burst của cùng Flow nằm cùng split.
+- BR-05: Ưu tiên group split theo session/batch.
+- BR-06: Flow cắt qua biên START/END phải theo label policy; không tự gán nếu không chắc.
+- BR-07: Không dùng test set để chọn threshold hoặc hyperparameter.
+- BR-08: Nhiều Flow từ một PCAP không được tính là nhiều session độc lập.
 
-## 6. Số lượng session
+## 7. Lỗi và trường hợp biên
 
-Nhiều flow từ một PCAP không tương đương nhiều session độc lập. Để đánh giá generalization, cần thu nhiều phiên cho mỗi app:
-- khác thời điểm;
-- có thể khác thiết bị hoặc điều kiện mạng;
-- cùng quy trình thao tác được ghi chép.
+| Tình huống | Hành vi |
+|---|---|
+| PCAP rỗng/hỏng | Loại session và ghi lý do |
+| Label timestamp sai | Không build sample liên quan |
+| Flow cắt qua START/END | Áp dụng policy đã định nghĩa hoặc loại sample |
+| Nhiều app chạy đồng thời | Ghi overlap; không ép label đơn |
+| Traffic nền/update | Gán lớp nền chỉ khi định nghĩa label rõ |
+| Một app chỉ có một session | Không tuyên bố generalization cho app đó |
 
-Không tuyên bố mô hình tổng quát hóa nếu một app chỉ có một session.
+## 8. File/hàm chính
 
-## 7. Data quality checklist
+- `tools/capture_session.py`: được README cũ nhắc đến; xác minh có trong repository trước khi dùng.
+- `test_ml_dataset_builder.py`: có trong snapshot.
+- `ml/data/meta.json`: lưu batch IDs, class names và số lượng sample trong snapshot.
 
-- [ ] PCAP mở được và có packet.
-- [ ] Timestamp hợp lệ, đơn vị thống nhất.
-- [ ] Interface/subnet/client được xác định.
-- [ ] Nhãn START/END không chồng lấn ngoài dự kiến.
-- [ ] Không có app không mong muốn chạy nền.
-- [ ] Có metadata session.
-- [ ] Kiểm tra phân bố flow/packet/bytes theo app.
-- [ ] Loại session lỗi hoặc nhãn không chắc chắn.
-- [ ] Lưu hash hoặc ID dataset version để tái lập.
+## 9. Tiêu chí nghiệm thu
+
+- [ ] PCAP đọc được và có packet.
+- [ ] Timestamp và label cùng time basis.
+- [ ] Session metadata đầy đủ trường đã biết.
+- [ ] Không có sample thiếu session/Flow linkage.
+- [ ] Split không chia Burst của cùng Flow qua nhiều tập.
+- [ ] Dataset version/hash được lưu.
+
+## 10. Ví dụ
+
+Một session ghi nhận thao tác xem YouTube từ START đến END. Dataset builder gắn packet vào Flow, tạo Burst và giữ cùng `session_id`/`flow_id` cho mọi sample phát sinh.

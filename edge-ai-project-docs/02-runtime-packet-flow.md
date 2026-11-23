@@ -1,55 +1,82 @@
-# 02 – Luồng xử lý packet khi chạy
+# 02 — Network Packet Capture và Packet Parsing
 
-## 1. Nguồn packet
+## 1. Mục đích
 
-Hai chế độ được README mô tả:
+Nhận packet từ live interface hoặc PCAP, parse metadata cần thiết và chuyển packet vào Flow Tracking. Cả hai nguồn phải dùng chung packet-processing path.
 
-- `LiveSource`: Scapy sniff từ interface, BPF filter mặc định `tcp or udp`.
-- `PcapSource`: đọc PCAP để replay offline.
+## 2. Phạm vi
 
-Cả hai nên đưa packet vào cùng một hàm xử lý lõi để giảm khác biệt giữa test offline và live.
+**Làm**
+- Live capture và offline PCAP replay.
+- Giữ timestamp gốc của packet.
+- Parse Ethernet/IP/TCP/UDP header cần cho Flow.
+- Nhận diện DNS và TLS/QUIC packet để chuyển parser tương ứng.
 
-## 2. Trình tự xử lý đề xuất
+**Không làm**
+- Không tự nhận diện application.
+- Không tự tạo DNS/SNI mapping.
+- Không tính CatBoost/1D-CNN prediction.
 
-1. Nhận packet và giữ timestamp gốc.
-2. Kiểm tra lớp Ethernet/IP và loại packet hỗ trợ.
-3. Xác định LAN endpoint, client IP và MAC nếu quan sát được.
-4. Nếu là DNS, parse response và cập nhật DNS cache.
-5. Chuẩn hóa 5-tuple và xác định hướng packet.
-6. Cập nhật FlowState và thống kê.
-7. Nếu packet thuộc TLS/QUIC handshake và chưa inspect, thử trích xuất metadata.
-8. Gửi metadata và trạng thái flow sang Rule Engine.
-9. Nếu Rule Engine chưa đủ tin cậy, chỉ gọi ML khi cửa sổ dữ liệu đủ điều kiện.
-10. Tổng hợp theo thiết bị và ghi log.
+## 3. Phụ thuộc
 
-## 3. Packet không parse được
+- Scapy được khai báo trong `requirements.txt`.
+- Packet Capture gọi Packet Parser.
+- Packet Parser chuyển packet metadata sang Flow Tracker và protocol parsers.
 
-Không parse được DNS/TLS/QUIC không đồng nghĩa packet hoặc flow bị lỗi. Ví dụ:
-- DoH/DoT làm DNS query không quan sát được ở port 53.
-- ECH có thể che SNI.
-- QUIC Initial có thể không giải mã được do thiếu packet, version hoặc lỗi parser.
-- TCP ClientHello có thể bị chia segment và cần reassembly.
+## 4. Luồng xử lý
 
-Trong các trường hợp này, pipeline vẫn phải cập nhật flow statistics và có thể dùng ML nếu đủ dữ liệu.
+1. Chọn nguồn: live interface hoặc PCAP.
+2. Nhận packet và giữ capture timestamp.
+3. Kiểm tra packet có Ethernet/IP và TCP/UDP hay không.
+4. Parse địa chỉ, port, protocol, packet length và transport metadata.
+5. Chuyển DNS packet sang DNS Parser.
+6. Chuyển packet vào Flow Tracker để gán Flow ID và direction.
+7. Chuyển TLS/QUIC candidate packet sang parser tương ứng khi cần.
+8. Không để lỗi parser phụ làm dừng capture/Flow tracking.
 
-## 4. TCP và QUIC metadata
+## 5. Input / Output
 
-### TLS over TCP
-Cần reassemble TCP stream trước khi parse ClientHello. Không giả định toàn bộ ClientHello nằm trong một packet đầu tiên.
+| Object | Trường tối thiểu |
+|---|---|
+| Input packet | Raw packet + capture timestamp |
+| ParsedPacket | `timestamp`, `src_ip`, `dst_ip`, `src_port`, `dst_port`, `protocol`, `packet_length`, `transport_flags` |
+| Output | ParsedPacket hoặc trạng thái `UNSUPPORTED` / `PARSE_ERROR` |
 
-### QUIC over UDP
-QUIC Initial có thể chứa TLS ClientHello được bảo vệ ở tầng QUIC. Parser chỉ nên trả metadata khi giải mã và parse thành công. Nếu thất bại, trả trạng thái không có metadata, không làm hỏng flow.
+Tên class và kiểu Python chính thức phải khớp implementation; bảng trên là contract logic.
 
-## 5. Quan sát và log
+## 6. Quy tắc nghiệp vụ
 
-Mỗi kết quả phân loại nên lưu tối thiểu:
-- timestamp;
-- device/client identifier;
-- flow key hoặc flow ID;
-- protocol và port;
-- SNI/ALPN/fingerprint nếu có;
-- rule result và ML result (nếu đã chạy);
-- final app, confidence, source;
-- lý do `unknown` hoặc thiếu dữ liệu.
+- BR-01: Live capture và PCAP replay dùng chung parser/processing path.
+- BR-02: Không thay timestamp capture bằng thời điểm parser xử lý.
+- BR-03: Packet không hỗ trợ không được đưa vào Flow như packet hợp lệ.
+- BR-04: DNS/TLS parser failure không được làm mất packet khỏi Flow statistics nếu header transport vẫn hợp lệ.
+- BR-05: Không lưu payload nhạy cảm vào log.
 
-Không ghi payload nhạy cảm. Log phải đủ để điều tra nhưng không lưu nội dung người dùng.
+## 7. Lỗi và trường hợp biên
+
+| Tình huống | Hành vi |
+|---|---|
+| Packet thiếu IP/TCP/UDP | Bỏ qua khỏi flow pipeline; ghi counter nếu cần |
+| Packet malformed | Đánh dấu parse error; tiếp tục capture |
+| PCAP rỗng | Báo input rỗng; không tạo prediction |
+| Interface không tồn tại/không có quyền | Dừng capture và trả lỗi cấu hình rõ ràng |
+| TLS ClientHello chia nhiều TCP segment | Chuyển đủ stream data cho TLS reassembly/parser |
+| DNS parser lỗi | Flow tracking vẫn tiếp tục |
+
+## 8. File/hàm chính
+
+- `requirements.txt`: khai báo dependency Scapy.
+- Runtime capture/parser path: **chưa xác định được đường dẫn source trong snapshot tài liệu**; Coding Agent phải tìm entrypoint hiện hữu trước khi tạo file mới.
+- Không tạo thêm `capture/main.py` hoặc class mới nếu repository đã có implementation tương đương.
+
+## 9. Tiêu chí nghiệm thu
+
+- [ ] Cùng PCAP chạy hai lần cho cùng số packet parse được.
+- [ ] Timestamp output khớp timestamp trong PCAP.
+- [ ] Packet TCP/UDP được parse đúng 5-tuple.
+- [ ] Packet lỗi parser không làm dừng xử lý các packet sau.
+- [ ] Live và PCAP path gọi cùng packet-processing function.
+
+## 10. Ví dụ
+
+Một packet TCP từ `192.168.1.10:51000` đến `142.1.1.1:443` được parse thành metadata gồm source/destination IP, port, protocol TCP, timestamp và packet length; sau đó chuyển sang Flow Tracker.
