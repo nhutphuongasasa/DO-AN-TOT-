@@ -38,7 +38,7 @@ Tài liệu được viết lại dựa trên README dự án và các quyết �
 
 ## 4. Luồng hoạt động trong một trang
 
-![Luồng hoạt động hệ thống](images/Screenshot_23-11-2026_14734_.jpeg)
+![Luồng hoạt động hệ thống](images/flow-overview.png)
 
 ## 5. Nguyên tắc đọc tài liệu
 
