@@ -23,18 +23,18 @@ Tài liệu được viết lại dựa trên README dự án và các quyết �
 | File | Nội dung |
 |---|---|
 | [00-project-overview.md](edge-ai-project-docs/00-project-overview.md) | Mục tiêu, phạm vi, đầu vào/đầu ra, giới hạn |
-| [01-system-architecture.md](01-system-architecture.md) | Kiến trúc tổng thể và các module |
-| [02-runtime-packet-flow.md](02-runtime-packet-flow.md) | Đường đi của packet khi chạy live/offline |
-| [03-dns-cache-design.md](03-dns-cache-design.md) | DNS parser, cache IP-domain, rủi ro CDN/DoH |
-| [04-flow-tracking.md](04-flow-tracking.md) | 5-tuple, hướng flow, timeout, trạng thái |
-| [05-burst-based-approach.md](05-burst-based-approach.md) | Hướng Burst-based, cách định nghĩa và trích xuất |
-| [06-data-collection-and-labeling.md](06-data-collection-and-labeling.md) | Thu PCAP, nhãn, kiểm soát nhiễu và leakage |
-| [07-feature-engineering.md](07-feature-engineering.md) | Flow features, Burst features và feature parity |
-| [08-model-training-and-evaluation.md](08-model-training-and-evaluation.md) | Baseline, so sánh mô hình, chia tập và metrics |
-| [09-runtime-classification.md](09-runtime-classification.md) | Rule Engine + ML, quyết định và trạng thái phân loại |
-| [10-testing-and-troubleshooting.md](10-testing-and-troubleshooting.md) | Test quan trọng, replay, xử lý lỗi |
-| [11-roadmap-and-status.md](11-roadmap-and-status.md) | Trạng thái, thứ tự công việc và tiêu chí hoàn thành |
-| [12-glossary-and-decisions.md](12-glossary-and-decisions.md) | Thuật ngữ và quyết định kỹ thuật |
+| [01-system-architecture.md](edge-ai-project-docs/01-system-architecture.md) | Kiến trúc tổng thể và các module |
+| [02-runtime-packet-flow.md](edge-ai-project-docs/02-runtime-packet-flow.md) | Đường đi của packet khi chạy live/offline |
+| [03-dns-cache-design.md](edge-ai-project-docs/03-dns-cache-design.md) | DNS parser, cache IP-domain, rủi ro CDN/DoH |
+| [04-flow-tracking.md](edge-ai-project-docs/04-flow-tracking.md) | 5-tuple, hướng flow, timeout, trạng thái |
+| [05-burst-based-approach.md](edge-ai-project-docs/05-burst-based-approach.md) | Hướng Burst-based, cách định nghĩa và trích xuất |
+| [06-data-collection-and-labeling.md](edge-ai-project-docs/06-data-collection-and-labeling.md) | Thu PCAP, nhãn, kiểm soát nhiễu và leakage |
+| [07-feature-engineering.md](edge-ai-project-docs/07-feature-engineering.md) | Flow features, Burst features và feature parity |
+| [08-model-training-and-evaluation.md](edge-ai-project-docs/08-model-training-and-evaluation.md) | Baseline, so sánh mô hình, chia tập và metrics |
+| [09-runtime-classification.md](edge-ai-project-docs/09-runtime-classification.md) | Rule Engine + ML, quyết định và trạng thái phân loại |
+| [10-testing-and-troubleshooting.md](edge-ai-project-docs/10-testing-and-troubleshooting.md) | Test quan trọng, replay, xử lý lỗi |
+| [11-roadmap-and-status.md](edge-ai-project-docs/11-roadmap-and-status.md) | Trạng thái, thứ tự công việc và tiêu chí hoàn thành |
+| [12-glossary-and-decisions.md](edge-ai-project-docs/12-glossary-and-decisions.md) | Thuật ngữ và quyết định kỹ thuật |
 
 ## 4. Luồng hoạt động trong một trang
 
