@@ -84,21 +84,16 @@ Khi không có DNS evidence:
 - không tái sử dụng mapping hết TTL;
 - chuyển sang SNI/fingerprint/flow features;
 - nếu thiếu tín hiệu thì giữ `unknown`.
+  
+## 8. Các trường hợp DNS Response có thể trả về
 
-## 8. Bộ test bắt buộc
+| Trường hợp | Ví dụ | Ý nghĩa |
+| :--- | :--- | :--- |
+| Domain chính của ứng dụng | `chatgpt.com` | Có thể nhận diện ChatGPT |
+| Domain phụ / API | `api.openai.com` | Có thể thuộc ứng dụng ChatGPT |
+| Domain CDN | `cdn.example.com` | Có thể phục vụ nội dung ứng dụng |
+| CNAME | `abc.example.net` → `xyz.cdn.net` | Domain được chuyển hướng qua bí danh |
+| Không có IP trong Answer | `NOERROR` nhưng Answer rỗng | Không có IP để ánh xạ |
+| DNS Response không parse được | Gói bị thiếu, không hợp lệ hoặc không hỗ trợ | Không lấy được thông tin DNS đáng tin cậy |
 
-| Test | Kết quả mong đợi |
-|---|---|
-| Một domain resolve một IP | Có một candidate hợp lệ |
-| Một domain resolve nhiều IP | Lưu đủ IP |
-| Nhiều domain cùng IP | Không ghi đè candidate |
-| Client A và B cùng IP đích | Không trộn cache giữa client |
-| TTL hết hạn | Lookup không trả entry hết hạn |
-| DNS query không có response | Không tạo mapping |
-| Response RCODE lỗi / answer rỗng | Không tạo mapping hợp lệ |
-| CNAME chain | Resolve theo chain hợp lệ, có giới hạn |
-| DoH không quan sát được | Pipeline tiếp tục, không crash |
-
-## 9. Nguyên tắc phân loại từ DNS
-
-DNS chỉ tạo candidate evidence. Không nên tự động kết luận ứng dụng từ IP đích nếu IP dùng chung. Cần cân nhắc thời gian giữa DNS response và flow, client, domain candidate và các evidence khác.
+> **Lưu ý:** DNS chỉ tạo *candidate evidence*. Không nên tự động kết luận ứng dụng từ IP đích nếu IP dùng chung. Cần cân nhắc thời gian giữa DNS response và flow, client, domain candidate và các evidence khác.
