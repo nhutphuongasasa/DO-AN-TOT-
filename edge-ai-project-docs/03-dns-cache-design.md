@@ -215,117 +215,42 @@ tra tính mơ hồ của mapping.
 
 ## 8. Điều kiện kết luận ứng dụng trực tiếp từ DNS
 
-Đây là nhánh xử lý quan trọng của hệ thống. DNS có thể nhận diện ứng
-dụng ngay cả ở flow đầu tiên mà project quan sát được, không cần đợi
-thiết bị truy cập ứng dụng lần thứ hai.
+Project có thể nhận diện ứng dụng trực tiếp bằng DNS trong **2 trường
+hợp**. Cả hai đều phải thỏa mãn các điều kiện chung dưới đây.
 
-Tuy nhiên, **domain thuộc ứng dụng mới chỉ là một phần bằng chứng**.
-Project chỉ được kết luận ứng dụng khi DNS observation được liên kết
-đáng tin cậy với flow đang xét.
+### Điều kiện chung
 
-### Điều kiện 1: DNS Response hợp lệ
+1.  **Domain đã xác minh:** Domain thuộc danh sách domain chính hoặc
+    domain phụ/API đã xác minh của một ứng dụng.
+2.  **DNS Response hợp lệ:** Response được parse đúng, có Answer hợp lệ
+    và xác định được quan hệ domain -- IP thông qua A/AAAA hoặc CNAME
+    hợp lệ.
+3.  **IP khớp với flow:**
+    -   Source IP của flow khớp với Client IP đã gửi DNS Query.
+    -   Destination IP của flow khớp với IP được DNS Response phân giải.
+4.  **Không mơ hồ:** Các candidate mapping phù hợp không dẫn đến những
+    ứng dụng khác nhau. Nếu IP dùng chung khiến không thể phân biệt ứng
+    dụng, không kết luận trực tiếp.
 
--   Packet thực sự là DNS Response (`QR=1`), không phải DNS Query.
--   Response có `RCODE` phù hợp và có Answer hợp lệ.
--   QNAME, record type, answer section và các record liên quan được
-    parse đúng.
--   Có thể xác minh quan hệ giữa domain được truy vấn và IP thông qua
-    A/AAAA hoặc chuỗi CNAME hợp lệ.
--   Không tạo IP mapping từ response lỗi hoặc Answer rỗng.
--   Khi có đủ thông tin, cần correlation DNS Response với Query tương
-    ứng; không chỉ dựa vào `src_port == 53`.
+### Trường hợp 1: Flow đầu tiên -- sử dụng DNS Response mới
 
-### Điều kiện 2: Domain đã được xác minh thuộc ứng dụng
+Project đang capture và quan sát được DNS Response khi thiết bị truy cập
+ứng dụng lần đầu.
 
-Project cần có Application Domain Mapping được kiểm chứng.
-
-Ví dụ minh họa:
-
-``` python
-APPLICATION_DOMAINS = {
-    "ChatGPT": [
-        "chatgpt.com",
-        "api.openai.com"
-    ],
-    "YouTube": [
-        "youtube.com",
-        "googlevideo.com",
-        "ytimg.com"
-    ]
-}
-```
-
-Danh sách trên chỉ mang tính minh họa. Khi triển khai cần xác minh từng
-domain, đặc biệt là domain API, domain phụ, CDN và domain dùng chung.
-Không được mặc định một domain thuộc ứng dụng chỉ vì tên miền có chứa
-tên thương hiệu hoặc từ `api`.
-
-### Điều kiện 3: Flow khớp với DNS observation
-
-Khi flow xuất hiện, cần kiểm tra:
-
--   Source IP của flow khớp với `client_ip` của DNS observation.
--   Destination IP của flow khớp với IP được DNS Response phân giải.
--   DNS mapping còn thời hạn hiệu lực theo TTL tại thời điểm flow xuất
-    hiện.
--   Thời điểm DNS observation phù hợp với flow; không sử dụng một
-    observation không liên quan hoặc đã hết hạn.
--   Quan hệ CNAME/A/AAAA được giữ đúng, không tự suy diễn domain đích từ
-    một record không liên quan.
-
-### Điều kiện 4: Không có mâu thuẫn về ứng dụng
-
-Nếu một IP có nhiều candidate domain:
-
--   Nếu tất cả candidate hợp lệ, còn hiệu lực và đều ánh xạ đến cùng một
-    ứng dụng đã xác minh, có thể kết luận **ứng dụng**. Không nhất thiết
-    phải khẳng định chính xác domain nào tạo ra flow.
--   Nếu candidate thuộc nhiều ứng dụng khác nhau, mapping được xem là
-    ambiguous.
--   Nếu IP thuộc CDN/shared infrastructure và không có đủ bằng chứng
-    phân biệt, không được kết luận ứng dụng chỉ từ IP.
--   Nếu domain chưa được xác minh hoặc có mâu thuẫn trong mapping,
-    chuyển sang ML hoặc giữ UNKNOWN tùy chính sách của hệ thống.
-
-### Flow đầu tiên truy cập ứng dụng có thể được nhận diện như thế nào?
-
-Ví dụ: thiết bị lần đầu truy cập ChatGPT trong thời gian project đang
-capture.
-
-**Bước 1 -- Project quan sát DNS Response**
+Ví dụ:
 
 ``` text
+DNS Response:
 Client IP:  192.168.1.10
-QNAME:      chatgpt.com
-RCODE:      NOERROR
-Answer:
-    chatgpt.com → 104.x.x.x
-TTL:        300 seconds
+Domain:     chatgpt.com
+Resolved IP: 104.x.x.x
+
+Flow:
+Source IP:      192.168.1.10
+Destination IP: 104.x.x.x
 ```
 
-Parser xác minh response và lưu mapping vào DNS Cache, gắn với client IP
-và thời điểm quan sát.
-
-**Bước 2 -- Flow tương ứng xuất hiện**
-
-``` text
-Source IP:       192.168.1.10
-Destination IP:  104.x.x.x
-Destination Port: 443
-Timestamp:       08:02:00
-```
-
-**Bước 3 -- Đối chiếu DNS Cache và Application Domain Mapping**
-
-``` text
-Flow source IP      == DNS client IP
-Flow destination IP == DNS resolved IP
-Flow timestamp      nằm trong thời hạn mapping
-chatgpt.com         thuộc domain ChatGPT đã xác minh
-Candidate mapping   không mơ hồ
-```
-
-Nếu tất cả điều kiện đều đạt, project có thể kết luận:
+Nếu tất cả **điều kiện chung** đều đạt, project có thể kết luận:
 
 ``` text
 Application: ChatGPT
@@ -333,54 +258,53 @@ Identification Method: DNS
 Status: DNS_IDENTIFIED
 ```
 
-Project không cần chờ thiết bị truy cập ChatGPT lần thứ hai và cũng
-không cần đưa flow qua ML chỉ để nhận diện ứng dụng.
+Không cần có DNS Cache từ lần truy cập trước và không cần đưa flow qua
+ML chỉ để nhận diện ứng dụng.
 
-Điều này chỉ đúng khi project quan sát được DNS Response và flow tương
-ứng. Nếu DNS đã nằm trong cache của hệ điều hành, được phân giải trước
-khi capture bắt đầu, hoặc sử dụng DoH/DoT/VPN khiến project không quan
-sát được DNS, project không có bằng chứng DNS mới để thực hiện kết luận
-này.
+### Trường hợp 2: Flow tiếp theo -- sử dụng DNS Cache
 
-### Domain chính và domain phụ/API
+Project không bắt được DNS Response mới tại thời điểm flow xuất hiện,
+nhưng đã lưu mapping từ DNS Response hợp lệ trước đó.
 
-Cả domain chính và domain phụ/API đã xác minh đều có thể dùng để nhận
-diện ứng dụng. Ví dụ, nếu `api.openai.com` đã được xác minh thuộc
-ChatGPT, DNS Response phân giải domain này thành IP hợp lệ và flow từ
-đúng client đến đúng IP trong thời hạn mapping, project có thể kết luận
-ChatGPT.
+Ngoài việc thỏa mãn **tất cả điều kiện chung**, cần thêm:
 
-Không cần bắt buộc flow phải truy cập domain chính. Điều quan trọng là
-domain đã được xác minh và flow khớp với DNS observation.
+-   DNS Cache có mapping tương ứng với client IP và destination IP của
+    flow.
+-   Mapping vẫn còn hiệu lực TTL tại thời điểm flow xuất hiện.
 
-### Kết quả
-
-Nếu tất cả điều kiện trên được đáp ứng:
+Ví dụ:
 
 ``` text
-Flow
-  |
-  v
-DNS Cache Lookup
-  |
-  v
-Valid DNS Observation
-  |
-  v
-Verified Application Domain
-  |
-  v
-Flow / Client / IP / Time Match
-  |
-  v
-No Cross-Application Ambiguity
-  |
-  v
-Application Identified by DNS
+DNS Cache đã lưu:
+192.168.1.10
+chatgpt.com → 104.x.x.x
+TTL: 300 seconds
+
+Flow tiếp theo:
+Source IP:      192.168.1.10
+Destination IP: 104.x.x.x
 ```
 
-Lưu ý: Kết luận này dựa trên bằng chứng domain và flow tương ứng, không
-phải chỉ vì thiết bị đã từng truy vấn domain đó.
+Nếu mapping còn TTL và các điều kiện chung đều đạt, project có thể kết
+luận ChatGPT mà không cần DNS Query/Response mới hoặc ML.
+
+### Tóm tắt
+
+  -----------------------------------------------------------------------
+  Trường hợp                          Điều kiện
+  ----------------------------------- -----------------------------------
+  **Flow đầu tiên**                   Domain đã xác minh + DNS Response
+                                      hợp lệ + Source/Destination IP
+                                      khớp + mapping không mơ hồ
+
+  **Flow tiếp theo**                  Tất cả điều kiện của flow đầu
+                                      tiên + có DNS Cache tương ứng +
+                                      mapping còn TTL
+  -----------------------------------------------------------------------
+
+Nếu một trong các điều kiện không đạt, project không kết luận ứng dụng
+trực tiếp bằng DNS mà chuyển flow sang ML hoặc UNKNOWN tùy kết quả phân
+loại.
 
 ## 9. Khi nào cần chuyển sang Machine Learning?
 
@@ -520,22 +444,22 @@ Edge AI.
 
 Nguyên tắc xử lý:
 
-  -----------------------------------------------------------------------
-  Điều kiện                           Hành động
-  ----------------------------------- -----------------------------------
-  Domain chính/phụ đã xác minh, flow  Kết luận ứng dụng bằng DNS
-  khớp và mapping đáng tin cậy        
+  ---------------------------------------------------------------------
+  Điều kiện                          Hành động
+  ---------------------------------- ----------------------------------
+  Domain chính/phụ đã xác minh, flow Kết luận ứng dụng bằng DNS
+  khớp và mapping đáng tin cậy       
 
-  Domain CDN hoặc shared              Không kết luận chỉ từ DNS
-  infrastructure                      
+  Domain CDN hoặc shared             Không kết luận chỉ từ DNS
+  infrastructure                     
 
-  DNS Cache có nhiều candidate mơ hồ  Tiếp tục xử lý bằng ML hoặc giữ
-                                      Unknown
+  DNS Cache có nhiều candidate mơ hồ Tiếp tục xử lý bằng ML hoặc giữ
+                                     Unknown
 
-  Không có DNS mapping                Sử dụng ML
+  Không có DNS mapping               Sử dụng ML
 
-  ML không đủ confidence              Trả về Unknown
-  -----------------------------------------------------------------------
+  ML không đủ confidence             Trả về Unknown
+  ---------------------------------------------------------------------
 
 **Mục tiêu cuối cùng:** Tận dụng DNS để nhận diện ứng dụng khi có đủ
 bằng chứng, đồng thời sử dụng Machine Learning để phân loại traffic mã
