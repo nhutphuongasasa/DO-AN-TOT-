@@ -84,3 +84,10 @@ Flow/Device LightGBM scripts hiện có được xem là baseline cũ, không t�
 ## 10. Ví dụ
 
 Một training run tạo CatBoost artifact, 1D-CNN artifact và fusion artifact. Runtime nạp cả ba artifacts có cùng class mapping/schema; nếu một artifact thiếu hoặc không tương thích, prediction không được coi là hợp lệ.
+
+
+## 11. Framework và contract
+
+- Framework cho 1D-CNN: **PyTorch**.
+- Tensor layout, sequence length, feature/channel order, padding, truncation và normalization vẫn là OPEN; xem `14-implementation-parameters.md`.
+- Interface module: `13-module-contracts.md`.

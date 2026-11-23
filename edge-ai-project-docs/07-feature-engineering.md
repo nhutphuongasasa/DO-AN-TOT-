@@ -93,3 +93,12 @@ Tensor dimensions và maximum sequence length hiện chưa được cung cấp.
 ## 10. Ví dụ
 
 Một Flow có ba Burst. Extractor tạo một vector thống kê tổng hợp cho CatBoost và một chuỗi ba Burst theo đúng thứ tự cho 1D-CNN. Hai input giữ cùng `flow_id` và label.
+
+
+## 11. Contract liên module
+
+- Giữ `session_id`, `flow_id` và `burst_index` khi áp dụng.
+- Branch A nhận Burst Statistics; Branch B nhận Burst Sequence.
+- Hai branch dùng chung class mapping/order.
+- Tensor layout/sequence dimensions chưa được giả định; xem `14-implementation-parameters.md`.
+- Interfaces: `13-module-contracts.md`.

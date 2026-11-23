@@ -81,3 +81,15 @@ Mọi Burst và prediction phải truy ngược được về `flow_id` và `ses
 5. Không tự điền Open Decisions bằng giá trị phỏng đoán.
 6. Khi cần giả định để triển khai, ghi rõ trong PR/code comment và cập nhật tài liệu.
 7. Thêm test chứng minh nhánh DNS/SNI early exit và ML fallback.
+
+
+## 5. Framework decision
+
+### D10 — PyTorch cho 1D-CNN
+
+Framework 1D-CNN được chọn là **PyTorch**. Điều này không đồng nghĩa source/model artifact đã tồn tại. Tensor shape, sequence length, channels, preprocessing và hyperparameters vẫn là OPEN, quản lý trong `14-implementation-parameters.md`.
+
+## 6. Tài liệu contract
+
+- `13-module-contracts.md`: interfaces/data contracts.
+- `14-implementation-parameters.md`: FIXED / CONFIGURABLE / OPEN.

@@ -81,3 +81,13 @@ Một module chỉ được đánh dấu `TESTED` khi:
 - Test:
 - Kết quả:
 - Tài liệu cập nhật:
+
+
+## 6. Tài liệu hóa contract và parameters
+
+- [x] README runtime order và source tree mục tiêu.
+- [x] Module contracts logic (chưa phải source implementation).
+- [x] Parameter registry FIXED / CONFIGURABLE / OPEN.
+- [x] Framework 1D-CNN chọn PyTorch.
+- [ ] Xác nhận các giá trị OPEN bằng thiết kế/thực nghiệm.
+- [ ] Implement source theo contract và cập nhật trạng thái module.

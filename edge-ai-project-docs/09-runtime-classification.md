@@ -107,3 +107,8 @@ Ví dụ schema minh họa; output contract thực tế cần được khóa tro
 ## 10. Ví dụ
 
 Flow có DNS mapping đã xác minh được trả application ngay tại bước DNS. Flow không có DNS evidence được thử SNI. Nếu SNI cũng không nhận diện được, Flow mới đi qua reconstruction, segmentation, CatBoost, 1D-CNN và fusion.
+
+
+## 11. Orchestrator contract
+
+Orchestrator tuần tự DNS → SNI → Burst ML. DNS/SNI identified là early-exit. Khi ML chạy, CatBoost và PyTorch 1D-CNN nhận cùng Flow observation; Fusion chạy trước Application Classifier. Xem `13-module-contracts.md` và `14-implementation-parameters.md`.
