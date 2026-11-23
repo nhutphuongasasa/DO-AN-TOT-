@@ -38,47 +38,7 @@ Tài liệu được viết lại dựa trên README dự án và các quyết �
 
 ## 4. Luồng hoạt động trong một trang
 
-```text
-                 GIAI ĐOẠN CHUẨN BỊ / TRAINING
-  PCAP + nhãn phiên
-         |
-         v
-  Làm sạch, ghép nhãn, tách flow
-         |
-         +------------------------+
-         |                        |
-         v                        v
-  Flow feature extraction   Burst extraction (hướng nghiên cứu)
-         |                        |
-         v                        v
-  Flow baseline model       Burst model / Flow+Burst
-         |                        |
-         +------------+-----------+
-                      v
-              Đánh giá độc lập
-                      |
-                Model artifact
-
-                    GIAI ĐOẠN RUNTIME
-  NIC / PCAP -> Packet Source -> Pipeline
-                                  |
-                    +-------------+-------------+
-                    |                           |
-                DNS/TLS/QUIC                Flow Tracker
-                    |                           |
-                Metadata/cache             Flow state/stats
-                    +-------------+-------------+
-                                  |
-                            Rule Engine
-                                  |
-                      Rule đủ tin cậy? ---- Có ---> Rule result
-                                  |
-                                 Không
-                                  v
-                         ML inference (khi đủ dữ liệu)
-                                  |
-                       Device Aggregator / Dashboard
-```
+![Luồng hoạt động hệ thống](images/Screenshot_23-11-2026_14734_.jpeg)
 
 ## 5. Nguyên tắc đọc tài liệu
 
