@@ -1,75 +1,87 @@
-# ============================================================
-# .gitignore — Edge AI Traffic Classification
-# ============================================================
+# ==========================================
+# Edge AI Application Classification Project
+# ==========================================
 
-# ----- Python -----
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-.Python
-*.egg-info/
-dist/
-build/
-.eggs/
+# Experiment outputs and generated datasets
+outputs/
+artifacts/
+datasets/
+results/
+reports/generated/
 
-# ----- Virtual Environment -----
+# Network packet captures
+captures/
+*.pcap
+*.pcapng
+*.cap
+
+# Machine Learning model files
+*.cbm
+*.pt
+*.pth
+*.onnx
+*.h5
+*.keras
+*.pkl
+*.joblib
+
+# Generated training and prediction data
+*.parquet
+*.feather
+
+# Python environments
 .venv/
 venv/
 env/
 ENV/
 
-# ----- Pytest / Testing -----
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 .coverage
 htmlcov/
-*.xml
 
-# ----- PCAP files (large binary, không push lên GitHub) -----
-*.pcap
-*.pcapng
+# Jupyter
+.ipynb_checkpoints/
 
-# ----- Large ML model files -----
-# Model text files có thể lớn hàng MB — dùng Git LFS hoặc loại bỏ
-ml/models/**/*.txt
-ml/models/**/*.bin
-ml/models/**/*.onnx
+# Logs
+logs/
+*.log
 
-# ----- ML data (CSV lớn) -----
-ml/data/dataset_flow.csv
-ml/data/dataset_device.csv
-ml/data/dataset_sequences.npz
+# CatBoost generated files
+catboost_info/
 
-# ----- Capture output -----
-captures/
-capture/
-
-# ----- Logs & reports tạm -----
-*.jsonl
-traffic_events.jsonl
-test_events.jsonl
-real_traffic_report.json
-user_f5_report.json
-user_traffic_report.json
-report.json
-test_report.json
-
-# ----- OS & Editor -----
-.DS_Store
-Thumbs.db
+# Temporary files and backups
+*.tmp
+*.temp
+*.bak
+*.backup
 *.swp
 *.swo
-.idea/
+*~
+
+# Build and distribution
+build/
+dist/
+*.egg-info/
+
+# IDE and editor
 .vscode/
-*.iml
+.idea/
+*.code-workspace
 
-# ----- Jupyter -----
-.ipynb_checkpoints/
-*.ipynb
+# OS files
+.DS_Store
+Thumbs.db
 
-# Giữ lại các file quan trọng trong models (label_encoder, cv_summary)
-!ml/models/**/label_encoder.json
-!ml/models/**/cv_summary.json
-!ml/data/meta.json
-!ml/results/*.png
-!ml/results/*.html
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Git temporary files
+*.orig

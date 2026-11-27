@@ -1,0 +1,119 @@
+version: 1
+# DNS rules for the six labels in the current Flow dataset.
+# Rules are intentionally conservative: only service-specific domains are listed.
+# Do NOT add generic providers (googleapis.com, google.com, cloudflare.com, etc.).
+# `other-web` is a model label, not a catch-all DNS rule.
+applications:
+  - application_id: chatgpt
+    domains:
+      - rule_id: chatgpt-chatgpt-com
+        domain: chatgpt.com
+        match: suffix
+      - rule_id: chatgpt-chat-openai-com
+        domain: chat.openai.com
+        match: suffix
+
+  - application_id: facebook
+    domains:
+      - rule_id: facebook-facebook-com
+        domain: facebook.com
+        match: suffix
+      - rule_id: facebook-facebook-net
+        domain: facebook.net
+        match: suffix
+      - rule_id: facebook-fbcdn-net
+        domain: fbcdn.net
+        match: suffix
+      - rule_id: facebook-fbsbx-com
+        domain: fbsbx.com
+        match: suffix
+      - rule_id: facebook-fb-com
+        domain: fb.com
+        match: suffix
+      - rule_id: facebook-fb-me
+        domain: fb.me
+        match: suffix
+
+  - application_id: tiktok
+    domains:
+      - rule_id: tiktok-tiktok-com
+        domain: tiktok.com
+        match: suffix
+      - rule_id: tiktok-tiktokapis-com
+        domain: tiktokapis.com
+        match: suffix
+      - rule_id: tiktok-tiktokcdn-com
+        domain: tiktokcdn.com
+        match: suffix
+      - rule_id: tiktok-tiktokcdn-eu-com
+        domain: tiktokcdn-eu.com
+        match: suffix
+      - rule_id: tiktok-tiktokcdn-us-com
+        domain: tiktokcdn-us.com
+        match: suffix
+      - rule_id: tiktok-tiktokv-com
+        domain: tiktokv.com
+        match: suffix
+      - rule_id: tiktok-tiktokv-eu
+        domain: tiktokv.eu
+        match: suffix
+      - rule_id: tiktok-tiktokv-us
+        domain: tiktokv.us
+        match: suffix
+      - rule_id: tiktok-tiktokw-eu
+        domain: tiktokw.eu
+        match: suffix
+      - rule_id: tiktok-tiktokw-us
+        domain: tiktokw.us
+        match: suffix
+      - rule_id: tiktok-ttwstatic-com
+        domain: ttwstatic.com
+        match: suffix
+
+  - application_id: youtube
+    domains:
+      - rule_id: youtube-youtube-com
+        domain: youtube.com
+        match: suffix
+      - rule_id: youtube-youtu-be
+        domain: youtu.be
+        match: suffix
+      - rule_id: youtube-googlevideo-com
+        domain: googlevideo.com
+        match: suffix
+      - rule_id: youtube-ytimg-com
+        domain: ytimg.com
+        match: suffix
+      - rule_id: youtube-youtube-nocookie-com
+        domain: youtube-nocookie.com
+        match: suffix
+      - rule_id: youtube-youtubei-googleapis-com
+        domain: youtubei.googleapis.com
+        match: suffix
+      - rule_id: youtube-youtube-googleapis-com
+        domain: youtube.googleapis.com
+        match: suffix
+      - rule_id: youtube-yt3-ggpht-com
+        domain: yt3.ggpht.com
+        match: suffix
+
+  - application_id: spotify
+    domains:
+      - rule_id: spotify-spotify-com
+        domain: spotify.com
+        match: suffix
+      - rule_id: spotify-spoti-fi
+        domain: spoti.fi
+        match: suffix
+      - rule_id: spotify-scdn-co
+        domain: scdn.co
+        match: suffix
+      - rule_id: spotify-pscdn-co
+        domain: pscdn.co
+        match: suffix
+      - rule_id: spotify-spotifycdn-com
+        domain: spotifycdn.com
+        match: suffix
+      - rule_id: spotify-spotifycdn-net
+        domain: spotifycdn.net
+        match: suffix

@@ -1,0 +1,825 @@
+import copy
+import csv
+import json
+import math
+import random
+from collections import Counter
+from pathlib import Path
+
+import numpy as np
+import torch
+from sklearn.metrics import (
+    accuracy_score,
+    balanced_accuracy_score,
+    classification_report,
+    confusion_matrix,
+    f1_score,
+)
+from torch import nn
+from torch.utils.data import DataLoader, TensorDataset
+
+# ============================================================
+# CONFIGURATION
+# ============================================================
+
+BASE = Path("outputs/p1_5_full_dataset_wirelen_v2")
+SEQUENCE_FILE = BASE / "burst_sequences.jsonl"
+SPLIT_FILE = BASE / "split_manifest.json"
+
+OUT = BASE / "cnn1d"
+OUT.mkdir(parents=True, exist_ok=True)
+
+CLASSES = [
+    "chatgpt",
+    "facebook",
+    "other-web",
+    "spotify",
+    "tiktok",
+    "youtube",
+]
+
+CLASS_TO_ID = {name: i for i, name in enumerate(CLASSES)}
+
+SEED = 42
+MAX_LEN = 256
+BATCH_SIZE = 64
+EPOCHS = 60
+LEARNING_RATE = 0.001
+WEIGHT_DECAY = 0.0001
+PATIENCE = 12
+THREADS = 4
+
+FEATURE_NAMES = [
+    "direction",
+    "log_duration_ms",
+    "log_packet_count",
+    "log_total_bytes",
+    "log_gap_ms",
+    "gap_missing",
+    "log_packet_length_mean",
+    "log_packet_length_min",
+    "log_packet_length_max",
+]
+
+# ============================================================
+# REPRODUCIBILITY
+# ============================================================
+
+random.seed(SEED)
+np.random.seed(SEED)
+torch.manual_seed(SEED)
+
+torch.set_num_threads(THREADS)
+DEVICE = torch.device("cpu")
+
+print("Device:", DEVICE)
+print("PyTorch:", torch.__version__)
+print("Maximum sequence length:", MAX_LEN)
+
+# ============================================================
+# LOAD SPLIT MANIFEST
+# ============================================================
+
+manifest = json.loads(SPLIT_FILE.read_text())
+
+split_map = {}
+label_map = {}
+
+for item in manifest["flows"]:
+    key = (item["session_id"], item["flow_id"])
+
+    if key in split_map:
+        raise RuntimeError(f"Duplicate Flow in manifest: {key}")
+
+    if item["application"] not in CLASS_TO_ID:
+        raise RuntimeError(
+            f"Unknown application: {item['application']}"
+        )
+
+    split_map[key] = item["split"]
+    label_map[key] = item["application"]
+
+print("\nManifest Flows:", len(split_map))
+print("Manifest split counts:", manifest["flow_counts"])
+print("Manifest class counts:", manifest["class_counts"])
+
+# ============================================================
+# BURST FEATURE EXTRACTION
+# ============================================================
+
+def safe_float(value, default=0.0):
+    try:
+        value = float(value)
+
+        if not math.isfinite(value):
+            return default
+
+        return value
+    except (TypeError, ValueError):
+        return default
+
+
+def burst_to_features(burst):
+    direction_name = str(
+        burst.get("direction", "UNKNOWN")
+    ).upper()
+
+    if direction_name == "FORWARD":
+        direction = 1.0
+    elif direction_name == "BACKWARD":
+        direction = -1.0
+    else:
+        direction = 0.0
+
+    duration = max(
+        0.0,
+        safe_float(burst.get("duration_seconds"))
+    )
+
+    packet_count = max(
+        0.0,
+        safe_float(burst.get("packet_count"))
+    )
+
+    total_bytes = max(
+        0.0,
+        safe_float(burst.get("total_bytes"))
+    )
+
+    gap_value = burst.get("inter_burst_gap_seconds")
+    gap_missing = 1.0 if gap_value is None else 0.0
+
+    gap = max(0.0, safe_float(gap_value))
+
+    lengths = burst.get("packet_lengths") or []
+
+    valid_lengths = [
+        safe_float(x)
+        for x in lengths
+        if safe_float(x) >= 0
+    ]
+
+    if valid_lengths:
+        length_mean = float(np.mean(valid_lengths))
+        length_min = float(min(valid_lengths))
+        length_max = float(max(valid_lengths))
+    else:
+        length_mean = (
+            total_bytes / packet_count
+            if packet_count > 0 else 0.0
+        )
+        length_min = 0.0
+        length_max = 0.0
+
+    return [
+        direction,
+        math.log1p(duration * 1000.0),
+        math.log1p(packet_count),
+        math.log1p(total_bytes),
+        math.log1p(gap * 1000.0),
+        gap_missing,
+        math.log1p(max(0.0, length_mean)),
+        math.log1p(max(0.0, length_min)),
+        math.log1p(max(0.0, length_max)),
+    ]
+
+
+def encode_flow(bursts):
+    n = len(bursts)
+
+    if n == 0:
+        raise RuntimeError("Flow contains no bursts")
+
+    # Uniform sampling across the complete Flow.
+    # Short sequences are repeated to reach MAX_LEN.
+    indices = np.linspace(
+        0,
+        n - 1,
+        num=MAX_LEN
+    ).round().astype(np.int64)
+
+    result = np.empty(
+        (MAX_LEN, len(FEATURE_NAMES)),
+        dtype=np.float32
+    )
+
+    for i, index in enumerate(indices):
+        result[i] = burst_to_features(bursts[int(index)])
+
+    return result
+
+
+# ============================================================
+# READ JSONL AND BUILD FLOW DATASET
+# ============================================================
+
+X_list = []
+y_list = []
+split_list = []
+key_list = []
+
+seen = set()
+sequence_count = 0
+
+print("\n=== READ BURST SEQUENCES ===")
+
+with SEQUENCE_FILE.open("r") as f:
+    for line_number, line in enumerate(f, 1):
+        if not line.strip():
+            continue
+
+        obj = json.loads(line)
+
+        key = (
+            obj["session_id"],
+            obj["flow_id"],
+        )
+
+        if key not in split_map:
+            if obj["application"] == "other-idle":
+                continue
+            raise RuntimeError(
+                f"Flow not found in manifest at line {line_number}: {key}"
+            )
+
+        if key in seen:
+            raise RuntimeError(f"Duplicate Flow in JSONL: {key}")
+
+        seen.add(key)
+
+        application = obj["application"]
+
+        if application != label_map[key]:
+            raise RuntimeError(
+                f"Label mismatch for Flow {key}: "
+                f"{application} != {label_map[key]}"
+            )
+
+        if application not in CLASS_TO_ID:
+            raise RuntimeError(f"Unknown class: {application}")
+
+        bursts = obj["bursts"]
+
+        if obj["sequence_length"] != len(bursts):
+            raise RuntimeError(
+                f"Sequence length mismatch: {key}"
+            )
+
+        encoded = encode_flow(bursts)
+
+        X_list.append(encoded)
+        y_list.append(CLASS_TO_ID[application])
+        split_list.append(split_map[key])
+        key_list.append(key)
+
+        sequence_count += 1
+
+        if sequence_count % 1000 == 0:
+            print("Processed Flows:", sequence_count)
+
+if seen != set(split_map):
+    missing = set(split_map) - seen
+    raise RuntimeError(
+        f"Manifest/JSONL mismatch. Missing Flows: {len(missing)}"
+    )
+
+X = np.stack(X_list).astype(np.float32)
+y = np.asarray(y_list, dtype=np.int64)
+splits = np.asarray(split_list)
+
+print("\n=== DATASET SUMMARY ===")
+print("Total Flows:", len(X))
+print("Tensor shape:", X.shape)
+print("Feature count:", X.shape[2])
+print("Sequence length:", X.shape[1])
+print("Split counts:", dict(Counter(splits)))
+
+for split_name in ["train", "validation", "test"]:
+    mask = splits == split_name
+    counts = Counter(
+        CLASSES[int(v)] for v in y[mask]
+    )
+    print(f"{split_name.upper()}:", dict(counts))
+
+# ============================================================
+# TRAIN-ONLY NORMALIZATION
+# ============================================================
+
+train_mask = splits == "train"
+val_mask = splits == "validation"
+test_mask = splits == "test"
+
+if not train_mask.any() or not val_mask.any() or not test_mask.any():
+    raise RuntimeError("One or more splits are empty")
+
+X_train_raw = X[train_mask]
+X_val_raw = X[val_mask]
+X_test_raw = X[test_mask]
+
+y_train = y[train_mask]
+y_val = y[val_mask]
+y_test = y[test_mask]
+
+train_mean = X_train_raw.mean(axis=(0, 1))
+train_std = X_train_raw.std(axis=(0, 1))
+
+train_std[train_std < 1e-6] = 1.0
+
+X_train = (
+    (X_train_raw - train_mean) / train_std
+).astype(np.float32)
+
+X_val = (
+    (X_val_raw - train_mean) / train_std
+).astype(np.float32)
+
+X_test = (
+    (X_test_raw - train_mean) / train_std
+).astype(np.float32)
+
+# CNN expects [batch, channels, sequence_length].
+X_train = np.transpose(X_train, (0, 2, 1)).copy()
+X_val = np.transpose(X_val, (0, 2, 1)).copy()
+X_test = np.transpose(X_test, (0, 2, 1)).copy()
+
+print("\nNormalization: TRAIN ONLY")
+print("Train tensor:", X_train.shape)
+print("Validation tensor:", X_val.shape)
+print("Test tensor:", X_test.shape)
+
+# ============================================================
+# CNN 1D MODEL
+# ============================================================
+
+class CNN1D(nn.Module):
+    def __init__(self, input_channels, num_classes):
+        super().__init__()
+
+        self.features = nn.Sequential(
+            nn.Conv1d(
+                input_channels, 64,
+                kernel_size=5, padding=2
+            ),
+            nn.BatchNorm1d(64),
+            nn.ReLU(),
+            nn.MaxPool1d(2),
+
+            nn.Conv1d(
+                64, 128,
+                kernel_size=5, padding=2
+            ),
+            nn.BatchNorm1d(128),
+            nn.ReLU(),
+            nn.MaxPool1d(2),
+
+            nn.Conv1d(
+                128, 128,
+                kernel_size=3, padding=1
+            ),
+            nn.BatchNorm1d(128),
+            nn.ReLU(),
+        )
+
+        self.pool = nn.AdaptiveAvgPool1d(1)
+
+        self.classifier = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.Dropout(0.4),
+            nn.Linear(64, num_classes),
+        )
+
+    def forward(self, x):
+        x = self.features(x)
+        x = self.pool(x)
+        return self.classifier(x)
+
+
+model = CNN1D(
+    input_channels=len(FEATURE_NAMES),
+    num_classes=len(CLASSES),
+).to(DEVICE)
+
+print("\n=== MODEL ===")
+print(model)
+
+# ============================================================
+# DATA LOADERS
+# ============================================================
+
+def make_loader(features, labels, shuffle):
+    dataset = TensorDataset(
+        torch.from_numpy(features),
+        torch.from_numpy(labels.astype(np.int64)),
+    )
+
+    return DataLoader(
+        dataset,
+        batch_size=BATCH_SIZE,
+        shuffle=shuffle,
+        num_workers=0,
+        pin_memory=False,
+    )
+
+
+train_loader = make_loader(X_train, y_train, True)
+val_loader = make_loader(X_val, y_val, False)
+test_loader = make_loader(X_test, y_test, False)
+
+# ============================================================
+# LOSS AND OPTIMIZER
+# ============================================================
+
+class_counts = np.bincount(
+    y_train,
+    minlength=len(CLASSES)
+)
+
+class_weights = (
+    len(y_train) /
+    (len(CLASSES) * np.maximum(class_counts, 1))
+)
+
+class_weights_tensor = torch.tensor(
+    class_weights,
+    dtype=torch.float32,
+    device=DEVICE,
+)
+
+criterion = nn.CrossEntropyLoss(
+    weight=class_weights_tensor
+)
+
+optimizer = torch.optim.AdamW(
+    model.parameters(),
+    lr=LEARNING_RATE,
+    weight_decay=WEIGHT_DECAY,
+)
+
+scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    optimizer,
+    mode="max",
+    factor=0.5,
+    patience=4,
+)
+
+# ============================================================
+# EVALUATION
+# ============================================================
+
+def predict_loader(model, loader):
+    model.eval()
+
+    all_labels = []
+    all_probabilities = []
+
+    with torch.no_grad():
+        for features, labels in loader:
+            features = features.to(DEVICE)
+
+            logits = model(features)
+            probabilities = torch.softmax(logits, dim=1)
+
+            all_labels.extend(labels.numpy().tolist())
+            all_probabilities.extend(
+                probabilities.cpu().numpy().tolist()
+            )
+
+    return (
+        np.asarray(all_labels, dtype=np.int64),
+        np.asarray(all_probabilities, dtype=np.float32),
+    )
+
+
+def calculate_metrics(true_labels, probabilities):
+    predictions = probabilities.argmax(axis=1)
+
+    return {
+        "accuracy": float(
+            accuracy_score(true_labels, predictions)
+        ),
+        "macro_f1": float(
+            f1_score(
+                true_labels,
+                predictions,
+                labels=list(range(len(CLASSES))),
+                average="macro",
+                zero_division=0,
+            )
+        ),
+        "balanced_accuracy": float(
+            balanced_accuracy_score(
+                true_labels,
+                predictions
+            )
+        ),
+    }
+
+
+# ============================================================
+# TRAINING
+# ============================================================
+
+print("\n=== TRAIN CNN 1D ===")
+
+best_macro_f1 = -1.0
+best_epoch = 0
+epochs_without_improvement = 0
+best_state = None
+history = []
+
+for epoch in range(1, EPOCHS + 1):
+    model.train()
+
+    total_loss = 0.0
+    total_samples = 0
+
+    for features, labels in train_loader:
+        features = features.to(DEVICE)
+        labels = labels.to(DEVICE)
+
+        optimizer.zero_grad()
+
+        logits = model(features)
+        loss = criterion(logits, labels)
+
+        loss.backward()
+        optimizer.step()
+
+        batch_size = labels.size(0)
+        total_loss += loss.item() * batch_size
+        total_samples += batch_size
+
+    train_loss = total_loss / max(total_samples, 1)
+
+    val_labels, val_probabilities = predict_loader(
+        model,
+        val_loader
+    )
+
+    val_metrics = calculate_metrics(
+        val_labels,
+        val_probabilities
+    )
+
+    val_macro = val_metrics["macro_f1"]
+
+    scheduler.step(val_macro)
+
+    current_lr = optimizer.param_groups[0]["lr"]
+
+    history.append({
+        "epoch": epoch,
+        "train_loss": train_loss,
+        "validation": val_metrics,
+        "learning_rate": current_lr,
+    })
+
+    print(
+        f"Epoch {epoch:03d}/{EPOCHS} | "
+        f"loss={train_loss:.5f} | "
+        f"val_acc={val_metrics['accuracy']:.5f} | "
+        f"val_macro_f1={val_macro:.5f} | "
+        f"val_bal_acc={val_metrics['balanced_accuracy']:.5f} | "
+        f"lr={current_lr:.6g}"
+    )
+
+    if val_macro > best_macro_f1:
+        best_macro_f1 = val_macro
+        best_epoch = epoch
+        epochs_without_improvement = 0
+        best_state = copy.deepcopy(model.state_dict())
+
+        torch.save(
+            {
+                "model_state_dict": best_state,
+                "classes": CLASSES,
+                "feature_names": FEATURE_NAMES,
+                "max_len": MAX_LEN,
+                "train_mean": train_mean.tolist(),
+                "train_std": train_std.tolist(),
+                "best_epoch": best_epoch,
+                "best_validation_macro_f1": best_macro_f1,
+            },
+            OUT / "cnn1d_best.pt",
+        )
+    else:
+        epochs_without_improvement += 1
+
+    if epochs_without_improvement >= PATIENCE:
+        print(
+            f"\nEarly stopping at epoch {epoch}. "
+            f"Best epoch: {best_epoch}"
+        )
+        break
+
+if best_state is None:
+    raise RuntimeError("CNN training did not produce a checkpoint")
+
+model.load_state_dict(best_state)
+
+print("\nBest epoch:", best_epoch)
+print("Best validation Macro F1:", best_macro_f1)
+
+# ============================================================
+# FINAL EVALUATION
+# ============================================================
+
+def evaluate_split(name, loader):
+    true_labels, probabilities = predict_loader(
+        model,
+        loader
+    )
+
+    metrics = calculate_metrics(
+        true_labels,
+        probabilities
+    )
+
+    predictions = probabilities.argmax(axis=1)
+
+    print(f"\n=== {name.upper()} RESULTS ===")
+    print("Flows:", len(true_labels))
+    print(f"Accuracy:          {metrics['accuracy']:.6f}")
+    print(f"Macro F1:          {metrics['macro_f1']:.6f}")
+    print(
+        f"Balanced Accuracy: "
+        f"{metrics['balanced_accuracy']:.6f}"
+    )
+
+    print("\nPer-class report:")
+    print(
+        classification_report(
+            true_labels,
+            predictions,
+            labels=list(range(len(CLASSES))),
+            target_names=CLASSES,
+            zero_division=0,
+        )
+    )
+
+    print("Confusion matrix:")
+    print(
+        confusion_matrix(
+            true_labels,
+            predictions,
+            labels=list(range(len(CLASSES))),
+        )
+    )
+
+    return {
+        "metrics": metrics,
+        "true_labels": true_labels,
+        "predictions": predictions,
+        "probabilities": probabilities,
+    }
+
+
+train_result = evaluate_split("train", train_loader)
+val_result = evaluate_split("validation", val_loader)
+test_result = evaluate_split("test", test_loader)
+
+# ============================================================
+# SAVE PREDICTIONS
+# ============================================================
+
+def save_predictions(filename, result, split_name):
+    path = OUT / filename
+
+    # Rebuild predictions with deterministic Flow order.
+    indices = np.where(splits == split_name)[0]
+
+    ordered_loader = make_loader(
+        X[indices],
+        y[indices],
+        shuffle=False,
+    )
+
+    ordered_result = evaluate_split(
+        f"{split_name}_ordered_export",
+        ordered_loader,
+    )
+
+    with path.open("w", newline="") as f:
+        writer = csv.writer(f)
+
+        header = [
+            "session_id",
+            "flow_id",
+            "split",
+            "true_label",
+            "predicted_label",
+        ]
+
+        header += [
+            f"prob_{name}" for name in CLASSES
+        ]
+
+        writer.writerow(header)
+
+        for local_index, global_index in enumerate(indices):
+            key = key_list[global_index]
+
+            true_id = int(
+                ordered_result["true_labels"][local_index]
+            )
+
+            pred_id = int(
+                ordered_result["predictions"][local_index]
+            )
+
+            probabilities = ordered_result["probabilities"][
+                local_index
+            ]
+
+            writer.writerow([
+                key[0],
+                key[1],
+                split_name,
+                CLASSES[true_id],
+                CLASSES[pred_id],
+                *[
+                    float(v) for v in probabilities
+                ],
+            ])
+
+    print("Saved:", path)
+
+save_predictions(
+    "train_predictions.csv",
+    train_result,
+    "train",
+)
+
+save_predictions(
+    "validation_predictions.csv",
+    val_result,
+    "validation",
+)
+
+save_predictions(
+    "test_predictions.csv",
+    test_result,
+    "test",
+)
+
+# ============================================================
+# SAVE METRICS AND CONFIGURATION
+# ============================================================
+
+metrics_output = {
+    "model": "CNN1D",
+    "device": str(DEVICE),
+    "classes": CLASSES,
+    "feature_names": FEATURE_NAMES,
+    "max_sequence_length": MAX_LEN,
+    "best_epoch": best_epoch,
+    "best_validation_macro_f1": best_macro_f1,
+    "train": train_result["metrics"],
+    "validation": val_result["metrics"],
+    "test": test_result["metrics"],
+    "split_policy": manifest["split_policy"],
+    "baseline_reference": {
+        "catboost_v1_validation_macro_f1": 0.4909,
+        "catboost_v1_test_macro_f1": 0.2480,
+        "catboost_flow_v2_validation_macro_f1": 0.5109,
+        "catboost_flow_v2_test_macro_f1": 0.2464,
+    },
+    "history": history,
+}
+
+(OUT / "metrics.json").write_text(
+    json.dumps(
+        metrics_output,
+        indent=2,
+        ensure_ascii=False,
+    )
+)
+
+config = {
+    "seed": SEED,
+    "max_len": MAX_LEN,
+    "batch_size": BATCH_SIZE,
+    "epochs": EPOCHS,
+    "learning_rate": LEARNING_RATE,
+    "weight_decay": WEIGHT_DECAY,
+    "patience": PATIENCE,
+    "threads": THREADS,
+    "feature_names": FEATURE_NAMES,
+    "classes": CLASSES,
+}
+
+(OUT / "config.json").write_text(
+    json.dumps(config, indent=2, ensure_ascii=False)
+)
+
+print("\n=== CNN 1D COMPLETED ===")
+print("Output directory:", OUT)
+print("Model:", OUT / "cnn1d_best.pt")
+print("Metrics:", OUT / "metrics.json")
+print("Predictions:", OUT / "*_predictions.csv")
+print(
+    "\nBatch2 Test is a cross-batch diagnostic, "
+    "not an untouched independent generalization test."
+)

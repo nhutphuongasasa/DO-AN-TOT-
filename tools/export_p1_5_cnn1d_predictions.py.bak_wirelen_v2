@@ -1,0 +1,423 @@
+import csv
+import json
+import math
+import shutil
+from pathlib import Path
+from datetime import datetime
+
+import numpy as np
+import torch
+import torch.nn as nn
+
+
+# ============================================================
+# CONFIG
+# ============================================================
+
+BASE = Path("outputs/p1_5_full_dataset_v1")
+SEQUENCE_FILE = BASE / "burst_sequences.jsonl"
+SPLIT_FILE = BASE / "split_manifest.json"
+CHECKPOINT = BASE / "cnn1d" / "cnn1d_best.pt"
+OUT = BASE / "cnn1d"
+
+CLASSES = [
+    "chatgpt",
+    "facebook",
+    "other-web",
+    "spotify",
+    "tiktok",
+    "youtube",
+]
+
+FEATURE_NAMES = [
+    "direction",
+    "log_duration_ms",
+    "log_packet_count",
+    "log_total_bytes",
+    "log_gap_ms",
+    "gap_missing",
+    "log_packet_length_mean",
+    "log_packet_length_min",
+    "log_packet_length_max",
+]
+
+MAX_LEN = 256
+BATCH_SIZE = 64
+DEVICE = torch.device("cpu")
+
+# ============================================================
+# MODEL - SAME ARCHITECTURE AS TRAINING
+# ============================================================
+
+class CNN1D(nn.Module):
+    def __init__(self, input_channels, num_classes):
+        super().__init__()
+
+        self.features = nn.Sequential(
+            nn.Conv1d(input_channels, 64, kernel_size=5, padding=2),
+            nn.BatchNorm1d(64),
+            nn.ReLU(),
+            nn.MaxPool1d(2),
+
+            nn.Conv1d(64, 128, kernel_size=5, padding=2),
+            nn.BatchNorm1d(128),
+            nn.ReLU(),
+            nn.MaxPool1d(2),
+
+            nn.Conv1d(128, 128, kernel_size=3, padding=1),
+            nn.BatchNorm1d(128),
+            nn.ReLU(),
+        )
+
+        self.pool = nn.AdaptiveAvgPool1d(1)
+
+        self.classifier = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.Dropout(0.4),
+            nn.Linear(64, num_classes),
+        )
+
+    def forward(self, x):
+        x = self.features(x)
+        x = self.pool(x)
+        return self.classifier(x)
+
+
+# ============================================================
+# FEATURE EXTRACTION - SAME AS TRAINING
+# ============================================================
+
+def safe_float(value, default=0.0):
+    try:
+        value = float(value)
+        if not math.isfinite(value):
+            return default
+        return value
+    except (TypeError, ValueError):
+        return default
+
+
+def burst_to_features(burst):
+    direction_name = str(
+        burst.get("direction", "UNKNOWN")
+    ).upper()
+
+    if direction_name == "FORWARD":
+        direction = 1.0
+    elif direction_name == "BACKWARD":
+        direction = -1.0
+    else:
+        direction = 0.0
+
+    duration = max(
+        0.0, safe_float(burst.get("duration_seconds"))
+    )
+    packet_count = max(
+        0.0, safe_float(burst.get("packet_count"))
+    )
+    total_bytes = max(
+        0.0, safe_float(burst.get("total_bytes"))
+    )
+
+    gap_value = burst.get("inter_burst_gap_seconds")
+    gap_missing = 1.0 if gap_value is None else 0.0
+    gap = max(0.0, safe_float(gap_value))
+
+    lengths = burst.get("packet_lengths") or []
+    valid_lengths = [
+        safe_float(x)
+        for x in lengths
+        if safe_float(x) >= 0
+    ]
+
+    if valid_lengths:
+        length_mean = float(np.mean(valid_lengths))
+        length_min = float(min(valid_lengths))
+        length_max = float(max(valid_lengths))
+    else:
+        length_mean = (
+            total_bytes / packet_count
+            if packet_count > 0 else 0.0
+        )
+        length_min = 0.0
+        length_max = 0.0
+
+    return [
+        direction,
+        math.log1p(duration * 1000.0),
+        math.log1p(packet_count),
+        math.log1p(total_bytes),
+        math.log1p(gap * 1000.0),
+        gap_missing,
+        math.log1p(max(0.0, length_mean)),
+        math.log1p(max(0.0, length_min)),
+        math.log1p(max(0.0, length_max)),
+    ]
+
+
+def encode_flow(bursts):
+    n = len(bursts)
+
+    if n == 0:
+        raise RuntimeError("Flow contains no bursts")
+
+    indices = np.linspace(
+        0, n - 1, num=MAX_LEN
+    ).round().astype(np.int64)
+
+    result = np.empty(
+        (MAX_LEN, len(FEATURE_NAMES)),
+        dtype=np.float32,
+    )
+
+    for i, index in enumerate(indices):
+        result[i] = burst_to_features(bursts[int(index)])
+
+    return result
+
+
+# ============================================================
+# CHECK INPUTS
+# ============================================================
+
+for path in [SEQUENCE_FILE, SPLIT_FILE, CHECKPOINT]:
+    if not path.exists():
+        raise FileNotFoundError(path)
+
+OUT.mkdir(parents=True, exist_ok=True)
+
+print("Loading checkpoint:", CHECKPOINT)
+
+checkpoint = torch.load(
+    CHECKPOINT,
+    map_location=DEVICE,
+)
+
+if checkpoint["classes"] != CLASSES:
+    raise RuntimeError("Checkpoint class order differs!")
+
+if checkpoint["feature_names"] != FEATURE_NAMES:
+    raise RuntimeError("Checkpoint feature names differ!")
+
+if checkpoint["max_len"] != MAX_LEN:
+    raise RuntimeError("Checkpoint MAX_LEN differs!")
+
+train_mean = np.asarray(
+    checkpoint["train_mean"], dtype=np.float32
+)
+train_std = np.asarray(
+    checkpoint["train_std"], dtype=np.float32
+)
+
+if len(train_mean) != len(FEATURE_NAMES):
+    raise RuntimeError("Invalid train_mean")
+
+if len(train_std) != len(FEATURE_NAMES):
+    raise RuntimeError("Invalid train_std")
+
+train_std[train_std < 1e-6] = 1.0
+
+model = CNN1D(
+    input_channels=len(FEATURE_NAMES),
+    num_classes=len(CLASSES),
+).to(DEVICE)
+
+model.load_state_dict(checkpoint["model_state_dict"])
+model.eval()
+
+print("Checkpoint loaded.")
+print("Original best epoch:", checkpoint["best_epoch"])
+print(
+    "Best validation Macro F1:",
+    checkpoint["best_validation_macro_f1"],
+)
+
+
+# ============================================================
+# LOAD MANIFEST
+# ============================================================
+
+manifest = json.loads(SPLIT_FILE.read_text())
+
+manifest_map = {}
+
+for item in manifest["flows"]:
+    key = (item["session_id"], item["flow_id"])
+
+    if key in manifest_map:
+        raise RuntimeError(f"Duplicate manifest Flow: {key}")
+
+    if item["application"] not in CLASSES:
+        raise RuntimeError(
+            f"Unknown manifest label: {item['application']}"
+        )
+
+    manifest_map[key] = {
+        "application": item["application"],
+        "split": item["split"],
+    }
+
+print("Manifest Flows:", len(manifest_map))
+
+
+# ============================================================
+# LOAD SEQUENCES IN ORIGINAL ORDER
+# ============================================================
+
+records = []
+seen = set()
+
+with SEQUENCE_FILE.open(encoding="utf-8") as f:
+    for line_number, line in enumerate(f, 1):
+        if not line.strip():
+            continue
+
+        obj = json.loads(line)
+
+        key = (obj["session_id"], obj["flow_id"])
+
+        if key in seen:
+            raise RuntimeError(f"Duplicate sequence: {key}")
+
+        seen.add(key)
+
+        if key not in manifest_map:
+            raise RuntimeError(
+                f"Sequence missing in manifest: {key}"
+            )
+
+        application = obj["application"]
+        expected = manifest_map[key]["application"]
+
+        if application != expected:
+            raise RuntimeError(
+                f"Label mismatch at line {line_number}: "
+                f"{key}: {application} != {expected}"
+            )
+
+        split = manifest_map[key]["split"]
+
+        if split not in ["train", "validation", "test"]:
+            raise RuntimeError(f"Unknown split: {split}")
+
+        if obj["sequence_length"] != len(obj["bursts"]):
+            raise RuntimeError(f"Sequence length mismatch: {key}")
+
+        records.append({
+            "key": key,
+            "application": application,
+            "split": split,
+            "features": encode_flow(obj["bursts"]),
+        })
+
+if seen != set(manifest_map):
+    raise RuntimeError(
+        f"Missing sequences: {len(set(manifest_map) - seen)}"
+    )
+
+print("Sequences loaded:", len(records))
+
+
+# ============================================================
+# ORDERED PREDICTION AND EXPORT
+# ============================================================
+
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+for split_name in ["train", "validation", "test"]:
+
+    subset = [
+        r for r in records
+        if r["split"] == split_name
+    ]
+
+    if not subset:
+        raise RuntimeError(f"Empty split: {split_name}")
+
+    # Preserve exactly the same order for keys, labels and features.
+    X = np.stack([
+        r["features"] for r in subset
+    ]).astype(np.float32)
+
+    y_true = [
+        r["application"] for r in subset
+    ]
+
+    X = (X - train_mean) / train_std
+    X = np.transpose(X, (0, 2, 1)).copy()
+
+    all_probabilities = []
+
+    with torch.no_grad():
+        for start in range(0, len(X), BATCH_SIZE):
+            batch = torch.from_numpy(
+                X[start:start + BATCH_SIZE]
+            ).to(DEVICE)
+
+            logits = model(batch)
+            probabilities = torch.softmax(
+                logits, dim=1
+            )
+
+            all_probabilities.extend(
+                probabilities.cpu().numpy()
+            )
+
+    all_probabilities = np.asarray(
+        all_probabilities, dtype=np.float32
+    )
+
+    predictions = all_probabilities.argmax(axis=1)
+
+    filename = f"{split_name}_predictions.csv"
+    output_path = OUT / filename
+
+    # Backup existing CSV before overwriting.
+    if output_path.exists():
+        backup_path = OUT / (
+            f"{split_name}_predictions."
+            f"before_order_fix_{timestamp}.csv"
+        )
+        shutil.copy2(output_path, backup_path)
+        print("Backup:", backup_path)
+
+    with output_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+
+        writer.writerow([
+            "session_id",
+            "flow_id",
+            "split",
+            "true_label",
+            "predicted_label",
+            *[f"prob_{name}" for name in CLASSES],
+        ])
+
+        for i, record in enumerate(subset):
+            writer.writerow([
+                record["key"][0],
+                record["key"][1],
+                split_name,
+                y_true[i],
+                CLASSES[int(predictions[i])],
+                *[
+                    float(v)
+                    for v in all_probabilities[i]
+                ],
+            ])
+
+    correct = sum(
+        y_true[i] == CLASSES[int(predictions[i])]
+        for i in range(len(subset))
+    )
+
+    print(
+        f"{split_name.upper()}: "
+        f"{len(subset)} Flows | "
+        f"Accuracy={correct / len(subset):.6f}"
+    )
+    print("Saved:", output_path)
+
+print("\nSUCCESS: All prediction CSVs exported in Flow order.")

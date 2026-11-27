@@ -1,0 +1,145 @@
+"""Single-NIC live capture entry point using the shared PacketProcessor."""
+from __future__ import annotations
+
+import argparse
+import json
+import uuid
+from pathlib import Path
+
+from appid.ml.burst_output import write_bursts_jsonl, write_bursts_tsv
+from appid.network.interfaces import SelectedInterface, select_interface
+from appid.pipeline.processor import PacketProcessor
+
+
+class SingleNICCapture:
+    """Bind capture to one selected interface and use the shared pipeline."""
+
+    def __init__(
+        self,
+        config_path: str | Path = "config/network.json",
+        *,
+        interface_name: str | None = None,
+        burst_jsonl: str | Path | None = None,
+        burst_tsv: str | Path | None = None,
+        verbose: bool = False,
+    ) -> None:
+        config = json.loads(Path(config_path).read_text(encoding="utf-8"))
+        network_config = dict(config.get("network", {}))
+        if interface_name:
+            network_config.update(mode="manual", interface=interface_name)
+        self.interface: SelectedInterface = select_interface(network_config)
+        self.session_id = str(uuid.uuid4())
+        self.processor = PacketProcessor(
+            session_id=self.session_id, lan_network=self.interface.network
+        )
+        self.burst_jsonl = Path(burst_jsonl) if burst_jsonl else None
+        self.burst_tsv = Path(burst_tsv) if burst_tsv else None
+        self.verbose = verbose
+        self._reported_states: dict[str, tuple[str, str, str]] = {}
+
+    def run(self) -> None:
+        from scapy.all import sniff
+
+        print(f"NIC     : {self.interface.name}")
+        print(f"Address : {self.interface.address}")
+        print(f"Subnet  : {self.interface.network}")
+        print(f"Session : {self.session_id}")
+        print("Capturing on this NIC only. Press Ctrl+C to stop.")
+        try:
+            sniff(
+                iface=self.interface.name,
+                prn=self._handle_packet,
+                store=False,
+            )
+        except KeyboardInterrupt:
+            print("\n[INFO] Capture stopped by user.")
+        finally:
+            self.processor.close()
+            self._write_burst_outputs()
+            self._print_stats()
+
+    def _handle_packet(self, raw_packet) -> None:
+        flow = self.processor.process(raw_packet)
+        if flow is None:
+            return
+
+        packet = flow.packets[-1]
+        result = flow.identification_result
+        application = result.application if result else "UNKNOWN"
+        method = result.method.value if result and result.method else "-"
+        reason = result.reason_code if result else "-"
+        state = (application, method, reason)
+
+        # Default output is event-oriented: one line when a Flow first appears
+        # and another only if its identification result changes. Use --verbose
+        # when packet-by-packet diagnostics are required.
+        if self.verbose or self._reported_states.get(flow.flow_id) != state:
+            print(
+                f"{flow.flow_id} | {packet.src_endpoint.ip}:{packet.src_endpoint.port} -> "
+                f"{packet.dst_endpoint.ip}:{packet.dst_endpoint.port} | "
+                f"{flow.key.protocol.value} | app={application} method={method} reason={reason}"
+            )
+            self._reported_states[flow.flow_id] = state
+
+    def _write_burst_outputs(self) -> None:
+        if self.burst_jsonl is not None:
+            path = write_bursts_jsonl(self.processor.bursts, self.burst_jsonl)
+            print(f"Burst JSONL: {path} ({len(self.processor.bursts)} records)")
+        if self.burst_tsv is not None:
+            path = write_bursts_tsv(self.processor.bursts, self.burst_tsv)
+            print(f"Burst TSV  : {path} ({len(self.processor.bursts)} records)")
+
+    def _print_stats(self) -> None:
+        stats = self.processor.stats
+        print(
+            "Capture summary: "
+            f"raw={stats.raw_packets}, parsed={stats.parsed_packets}, "
+            f"tracked={stats.tracked_packets}, outside_lan={stats.outside_lan_packets}, "
+            f"unsupported={stats.unsupported_packets}, parse_errors={stats.parse_errors}, "
+            f"dns_bindings={stats.dns_bindings_created}, "
+            f"dns_identified_flows={stats.dns_identified_flows}, "
+            f"sni_client_hellos={stats.sni_parsed_client_hellos}, "
+            f"sni_identified_flows={stats.sni_identified_flows}, "
+            f"sni_unmapped={stats.sni_unmapped_hostnames}, sni_errors={stats.sni_parse_errors}, "
+            f"udp_datagrams={stats.udp_datagrams}, udp_protocols={stats.udp_protocols}, "
+            f"udp_flows_expired={stats.udp_flows_expired}, "
+            f"quic_initial_candidates={stats.quic_initial_candidates}, "
+            f"quic_initial_decrypted={stats.quic_initial_decrypted}, "
+            f"quic_initial_rejected={stats.quic_initial_rejected}, "
+            f"quic_sni_identified_flows={stats.quic_sni_identified_flows}, "
+            f"quic_sni_unmapped={stats.quic_sni_unmapped_hostnames}, "
+            f"quic_ech={stats.quic_ech_detected}, dns_errors={stats.dns_processing_errors}, "
+            f"ml_evaluated={stats.ml_candidates_evaluated}, "
+            f"ml_admitted={stats.ml_candidates_admitted}, "
+            f"ml_rejected={stats.ml_candidates_rejected}, "
+            f"ml_pending={stats.ml_candidates_pending}, "
+            f"flows_finalized={stats.burst_flows_finalized}, bursts={stats.bursts_created}"
+        )
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Capture traffic on one NIC through the Hybrid AppID pipeline"
+    )
+    parser.add_argument("--config", default="config/network.json")
+    parser.add_argument(
+        "--interface",
+        help="Explicit NIC name; overrides network.mode/interface in the config",
+    )
+    parser.add_argument("--burst-jsonl", help="Optional JSONL output for completed Bursts")
+    parser.add_argument("--burst-tsv", help="Optional TSV output for completed Bursts")
+    parser.add_argument(
+        "--verbose", action="store_true", help="Print every processed packet (high-volume)"
+    )
+    args = parser.parse_args()
+    SingleNICCapture(
+        args.config,
+        interface_name=args.interface,
+        burst_jsonl=args.burst_jsonl,
+        burst_tsv=args.burst_tsv,
+        verbose=args.verbose,
+    ).run()
+
+
+if __name__ == "__main__":
+    main()

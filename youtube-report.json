@@ -1,0 +1,39 @@
+{
+  "started_utc": "2026-11-26T07:37:26.219690+00:00",
+  "client": "aioquic",
+  "quic_version": "v1",
+  "alpn": [
+    "h3"
+  ],
+  "mode": "HTTP/3-only; no TCP or HTTP/2 fallback",
+  "results": [
+    {
+      "app": "youtube",
+      "label": "YouTube",
+      "url": "https://www.youtube.com/?appid_quic_probe=1795678646219-1",
+      "expected_sni": "www.youtube.com",
+      "round": 1,
+      "http3_confirmed": true,
+      "http_status": 200,
+      "response_bytes": 936405,
+      "elapsed_seconds": 0.804,
+      "error": null
+    },
+    {
+      "app": "youtube",
+      "label": "YouTube",
+      "url": "https://www.youtube.com/?appid_quic_probe=1795678648024-2",
+      "expected_sni": "www.youtube.com",
+      "round": 2,
+      "http3_confirmed": true,
+      "http_status": 200,
+      "response_bytes": 935074,
+      "elapsed_seconds": 0.725,
+      "error": null
+    }
+  ],
+  "finished_utc": "2026-11-26T07:37:28.750512+00:00",
+  "success_count": 2,
+  "request_count": 2,
+  "all_http3_confirmed": true
+}

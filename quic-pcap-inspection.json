@@ -1,0 +1,61 @@
+{
+  "pcap": "quic-youtube.pcap",
+  "packets_read": 2015,
+  "quic_v1_initial_candidates": 19,
+  "initial_decrypt_rejected": 6,
+  "sni_records": [
+    {
+      "src": "192.168.133.251:36627",
+      "dst": "35.190.80.1:443",
+      "version": 1,
+      "sender_role": "client",
+      "dcid_hex": "df263969e6eaa440",
+      "sni": "a.nel.cloudflare.com",
+      "application_id": null,
+      "reason_code": "SNI_DOMAIN_UNMAPPED",
+      "rule_ids": [],
+      "ech_detected": true
+    },
+    {
+      "src": "192.168.133.251:50889",
+      "dst": "216.239.38.119:443",
+      "version": 1,
+      "sender_role": "client",
+      "dcid_hex": "bee9357d767591d8",
+      "sni": "www.youtube.com",
+      "application_id": "youtube",
+      "reason_code": "SNI_HOSTNAME_RULE_MATCH",
+      "rule_ids": [
+        "youtube-youtube-com"
+      ],
+      "ech_detected": false
+    },
+    {
+      "src": "192.168.133.251:45611",
+      "dst": "216.239.38.119:443",
+      "version": 1,
+      "sender_role": "client",
+      "dcid_hex": "2d72415b466c0cfa",
+      "sni": "www.youtube.com",
+      "application_id": "youtube",
+      "reason_code": "SNI_HOSTNAME_RULE_MATCH",
+      "rule_ids": [
+        "youtube-youtube-com"
+      ],
+      "ech_detected": false
+    },
+    {
+      "src": "192.168.133.251:51282",
+      "dst": "204.79.197.220:443",
+      "version": 1,
+      "sender_role": "client",
+      "dcid_hex": "52e07bc1449fd0ca",
+      "sni": "www.bing.com",
+      "application_id": null,
+      "reason_code": "SNI_DOMAIN_UNMAPPED",
+      "rule_ids": [],
+      "ech_detected": true
+    }
+  ],
+  "unique_sni_count": 4
+}

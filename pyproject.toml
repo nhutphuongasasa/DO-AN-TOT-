@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hybrid-appid"
+version = "0.1.0"
+description = "Hybrid network application identification for Edge deployment"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "scapy>=2.5,<3.0",
+  "PyYAML>=6.0,<7.0",
+  "psutil>=5.9,<8.0",
+  "cryptography>=42.0,<47.0",
+  "aioquic>=1.2,<2.0",
+]
+
+[project.scripts]
+appid-live-capture = "appid.capture.live:main"
+appid-pcap-replay = "appid.capture.pcap:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0,<9.0", "ruff>=0.6,<1.0"]
+ml = ["catboost>=1.2,<2.0", "torch>=2.2"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "."]
+testpaths = ["tests"]
+# The repository contains repeated test basenames (e.g. dns/test_parser.py
+# and packet/test_parser.py); importlib mode prevents module-name collisions.
+addopts = "--import-mode=importlib"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"

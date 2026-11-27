@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Hybrid AppID Dashboard</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">NETWORK INTELLIGENCE</div>
+        <h1>Hybrid AppID</h1>
+        <p class="sub">Live application identification results</p>
+      </div>
+      <div class="live"><span class="pulse"></span> CAPTURE FEED</div>
+    </header>
+
+    <section class="stats">
+      <article class="stat"><span>Finalized flows</span><strong id="total">0</strong></article>
+      <article class="stat"><span>Identified</span><strong id="identified">0</strong></article>
+      <article class="stat"><span>ML Fusion</span><strong id="ml">0</strong></article>
+      <article class="stat"><span>Unclassified</span><strong id="unknown">0</strong></article>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <div><h2>Flow predictions</h2><p>Only finalized Flow decisions are shown.</p></div>
+        <div class="tools">
+          <input id="search" type="search" placeholder="Search flow, IP, app…" aria-label="Search">
+          <button id="refresh">Refresh</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Flow ID</th><th>Source</th><th>Destination</th><th>Protocol</th><th>Application</th><th>Method</th><th>Confidence</th><th>Packets</th></tr></thead>
+          <tbody id="rows"><tr><td colspan="8" class="empty">Waiting for finalized results…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="foot"><span id="updated">Waiting for capture data</span><span>Auto refresh: 2 seconds</span></div>
+    </section>
+    <div class="hint">Start the dashboard and live capture in two terminals. Results appear here as soon as the pipeline finalizes each Flow.</div>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>
